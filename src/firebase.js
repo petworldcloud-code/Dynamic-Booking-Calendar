@@ -18,3 +18,9 @@ const app = isConfigured ? initializeApp(cfg) : null;
 export const auth = app ? getAuth(app) : null;
 // Default in-memory cache: writes are only confirmed after the server acknowledges them.
 export const db = app ? getFirestore(app) : null;
+
+/** Separate Auth instance so an admin can create an account without being signed out. */
+export function secondaryAuth() {
+  const second = initializeApp(cfg, `secondary-${Date.now()}`);
+  return getAuth(second);
+}

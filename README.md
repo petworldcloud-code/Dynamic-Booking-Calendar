@@ -6,7 +6,7 @@ Repo: https://github.com/petworldcloud-code/Dynamic-Booking-Calendar
 Site (after setup): https://petworldcloud-code.github.io/Dynamic-Booking-Calendar/
 
 ## Status
-Firebase project `dynamic-booking-calendar` (Singapore, asia-southeast1) is created with Email/Password auth, rules and the bookings index in place; GitHub variables and Pages source are set. Remaining: first admin bootstrap.
+Firebase project `dynamic-booking-calendar` (Singapore, asia-southeast1) is created with Email/Password auth, rules and the bookings index in place; GitHub variables and Pages source are set. The first admin is set up.
 
 See [Test report](#test-report) for what has and has not been verified. Nothing here has been deployed or connected to a real Firebase project until you complete the setup below.
 
@@ -22,9 +22,9 @@ See [Test report](#test-report) for what has and has not been verified. Nothing 
    npx firebase use --add        # pick your project (updates .firebaserc)
    npx firebase deploy --only firestore:rules,firestore:indexes
    ```
-7. **First administrator (bootstrap):** register in the app and verify the email. Then in the Firebase Console → Firestore → `users` → your UID document, set `role` = `admin` and `status` = `active`. Nobody becomes admin automatically. Later admins can approve users from the **Users** panel in the app.
+7. **First administrator (bootstrap):** create the first login in Firebase Console → Authentication → Users → Add user, then in Firestore create `users/<that UID>` with fields `displayName`, `email`, `role` = `admin`, `status` = `active`, `createdAt`, `updatedAt` (timestamps). Nobody becomes admin automatically.
 
-Accounts are created through registration. Deleting a Firebase Auth account is done in the Firebase Console (a client-only app cannot do it securely).
+**Accounts:** there is no self-registration and no email verification. Only an administrator creates accounts, from **Users → Add user** in the app (name, email, initial password, role). Users can change their password with "Forgot password". Set a user's status to `suspended` to block them. Deleting a login is done in the Firebase Console. Anyone can technically create a bare Firebase login through the public API, but without an admin-created profile the rules give it no access to any data.
 
 ## GitHub setup
 1. Push this folder to `main` of the repository above.
@@ -46,7 +46,7 @@ npm run test:rules       # Firestore rules tests (needs Java for the emulator)
 - **Calendar**: 42 consecutive dates from today in Malaysia time; rows are Mon–Sun, so a mid-week start leaves blank leading cells (up to 7 rows). Prev/Next shifts by 42 days; Today restores the rolling view. At Malaysian midnight (and on tab focus/wake) the date is recomputed from the timezone.
 - **Overflow**: 6 labels per day, then `+N more bookings` opening a day detail view. All records are kept.
 - **Live sync**: one range `onSnapshot` for the calendar and one for the table. Success messages appear only after the server confirms the write (15 s timeout otherwise). Edits use a transaction that rejects stale versions (conflict message with a "Load latest version" link).
-- **Roles**: admins manage everything; standard users edit/delete only their own bookings. Enforced in `firestore.rules`. Pending/suspended or unverified users cannot read bookings.
+- **Roles**: admins manage everything; standard users edit/delete only their own bookings. Enforced in `firestore.rules`. Users without an active profile (or suspended) cannot read bookings.
 - **History**: the History tab lists bookings before today. Nothing is deleted when the calendar moves on.
 - **Retention**: permanent deletion is off by default. Admin sets days (default 90) in **Retention**.
 

@@ -59,7 +59,7 @@ function authScreen(mode = 'login') {
   const err = h('p', { class: 'error', role: 'alert', hidden: true });
   const fail = (e) => { err.textContent = friendly(e); err.hidden = false; };
   const switchTo = (m) => h('button', { type: 'button', class: 'link', onclick: () => authScreen(m) },
-    { login: 'Back to log in', register: 'Create an account', reset: 'Forgot password?' }[m]);
+    { login: 'Back to log in', reset: 'Forgot password?' }[m]);
 
   let form;
   if (mode === 'login') {
@@ -70,20 +70,9 @@ function authScreen(mode = 'login') {
       }
     }, field('Email', { name: 'email', type: 'email', required: true, autocomplete: 'username' }),
     field('Password', { name: 'pw', type: 'password', required: true, autocomplete: 'current-password' }),
+    h('p', { class: 'meta' }, 'Accounts are created by an administrator.'),
     err, h('button', { class: 'primary', type: 'submit' }, 'Log in'),
-    h('div', { class: 'links' }, switchTo('register'), switchTo('reset')));
-  } else if (mode === 'register') {
-    form = h('form', {
-      onsubmit: async (e) => {
-        e.preventDefault();
-        try { await api.register(e.target.name.value.trim(), e.target.email.value.trim(), e.target.pw.value); } catch (x) { fail(x); }
-      }
-    }, field('Your name', { name: 'name', required: true, maxlength: 80, autocomplete: 'name' }),
-    field('Email', { name: 'email', type: 'email', required: true, autocomplete: 'username' }),
-    field('Password (min 6 characters)', { name: 'pw', type: 'password', minlength: 6, required: true, autocomplete: 'new-password' }),
-    h('p', { class: 'meta' }, 'After registering, verify your email. An administrator must then approve your account.'),
-    err, h('button', { class: 'primary', type: 'submit' }, 'Register'),
-    h('div', { class: 'links' }, switchTo('login')));
+    h('div', { class: 'links' }, switchTo('reset')));
   } else {
     form = h('form', {
       onsubmit: async (e) => {
@@ -94,27 +83,17 @@ function authScreen(mode = 'login') {
     h('button', { class: 'primary', type: 'submit' }, 'Send reset link'),
     h('div', { class: 'links' }, switchTo('login')));
   }
-  showScreen({ login: 'Log in', register: 'Register', reset: 'Reset password' }[mode], [form]);
+  showScreen({ login: 'Log in', reset: 'Reset password' }[mode], [form]);
 }
 
 function accountScreen(s) {
   const out = h('button', { class: 'ghost', type: 'button', onclick: () => api.logout() }, 'Log out');
-  if (s.state === 'verify') {
-    showScreen('Verify your email', [
-      h('p', {}, `We sent a verification link to ${s.user.email}. Open it, then press the button below.`),
-      h('button', {
-        class: 'primary', type: 'button', onclick: async () => {
-          try { (await api.refreshVerification()) ? location.reload() : toast('Not verified yet.', 'err'); } catch (e) { toast(friendly(e), 'err'); }
-        }
-      }, "I've verified my email"),
-      h('button', {
-        class: 'ghost', type: 'button', onclick: async () => {
-          try { await api.resendVerification(); toast('Verification email sent.'); } catch (e) { toast(friendly(e), 'err'); }
-        }
-      }, 'Resend email'), out]);
+  if (s.state === 'noaccess') {
+    showScreen('No access', [
+      h('p', {}, `${s.user.email} has no access to this calendar. Ask an administrator to set up your account.`), out]);
   } else if (s.state === 'pending') {
-    showScreen('Waiting for approval', [
-      h('p', {}, 'Your account is registered and verified. An administrator needs to approve it before you can see any bookings.'), out]);
+    showScreen('Access not enabled', [
+      h('p', {}, 'Your account has not been activated yet. Ask an administrator.'), out]);
   } else if (s.state === 'suspended') {
     showScreen('Account suspended', [h('p', {}, 'Your account has been suspended. Contact an administrator.'), out]);
   } else {
@@ -328,6 +307,19 @@ function wire() {
   $('btn-users').onclick = openUsers;
   $('users-close').onclick = () => { $('dlg-users').close(); unUsers?.(); unUsers = null; };
   $('btn-settings').onclick = openSettings;
+  $('form-newuser').onsubmit = async (e) => {
+    e.preventDefault();
+    const err = $('nu-error'); const btn = $('nu-save');
+    err.hidden = true; btn.disabled = true; btn.textContent = 'Creating…';
+    try {
+      await api.adminCreateUser({
+        name: $('nu-name').value.trim(), email: $('nu-email').value.trim(),
+        password: $('nu-pw').value, role: $('nu-role').value
+      });
+      e.target.reset();
+      toast('User created and activated.');
+    } catch (x) { err.textContent = friendly(x); err.hidden = false; } finally { btn.disabled = false; btn.textContent = 'Create'; }
+  };
   $('s-cancel').onclick = () => $('dlg-settings').close();
   $('form-settings').onsubmit = async (e) => {
     e.preventDefault();

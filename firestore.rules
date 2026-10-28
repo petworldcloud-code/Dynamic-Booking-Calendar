@@ -4,11 +4,10 @@ service cloud.firestore {
 
     // ---------- helpers ----------
     function signedIn() { return request.auth != null; }
-    function verified() { return signedIn() && request.auth.token.email_verified == true; }
     function profile(uid) { return get(/databases/$(database)/documents/users/$(uid)).data; }
     function hasProfile(uid) { return exists(/databases/$(database)/documents/users/$(uid)); }
     function isActive() {
-      return verified() && hasProfile(request.auth.uid) && profile(request.auth.uid).status == 'active';
+      return signedIn() && hasProfile(request.auth.uid) && profile(request.auth.uid).status == 'active';
     }
     function isAdmin() { return isActive() && profile(request.auth.uid).role == 'admin'; }
     function isOwner(data) { return data.createdBy == request.auth.uid; }
@@ -17,15 +16,15 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
 
-      // Self-registration: own doc only, always role=user, status=pending.
-      allow create: if signedIn() && request.auth.uid == uid
+      // No self-registration: only an admin creates profiles (accounts are made in the app by an admin).
+      allow create: if isAdmin()
         && request.resource.data.keys().hasOnly(['displayName', 'email', 'role', 'status', 'createdAt', 'updatedAt'])
-        && request.resource.data.role == 'user'
-        && request.resource.data.status == 'pending'
+        && request.resource.data.role in ['admin', 'user']
+        && request.resource.data.status in ['pending', 'active', 'suspended']
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() > 0
         && request.resource.data.displayName.size() <= 80
-        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.email is string
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
 

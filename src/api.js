@@ -11,9 +11,8 @@ export const DEMO = import.meta.env.VITE_DEMO_MODE === 'demo';
 export const CONFIGURED = DEMO || isConfigured;
 
 const real = {
-  watchSession: auth.watchSession, login: auth.login, register: auth.register, logout: auth.logout,
-  resetPassword: auth.resetPassword, resendVerification: auth.resendVerification,
-  refreshVerification: auth.refreshVerification,
+  watchSession: auth.watchSession, login: auth.login, logout: auth.logout,
+  resetPassword: auth.resetPassword, adminCreateUser: auth.adminCreateUser,
   watchRange: bookings.watchRange, watchList: bookings.watchList,
   createBooking: bookings.createBooking, updateBooking: bookings.updateBooking,
   deleteBooking: bookings.deleteBooking, millis: bookings.millis,

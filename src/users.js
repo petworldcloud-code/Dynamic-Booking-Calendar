@@ -1,16 +1,12 @@
 import {
-  doc, getDoc, setDoc, onSnapshot, collection, query, orderBy, updateDoc, serverTimestamp
+  doc, setDoc, onSnapshot, collection, query, orderBy, updateDoc, serverTimestamp
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 
-/** Create the caller's own profile (always role=user, status=pending; enforced by rules). */
-export async function ensureProfile(user, displayName) {
-  const ref = doc(db, 'users', user.uid);
-  const snap = await getDoc(ref);
-  if (snap.exists()) return;
-  await setDoc(ref, {
-    displayName: (displayName || user.displayName || user.email.split('@')[0]).slice(0, 80),
-    email: user.email, role: 'user', status: 'pending',
+/** Admin only (enforced by rules): create the profile for an account the admin just made. */
+export function createUserProfile(uid, { displayName, email, role, status }) {
+  return setDoc(doc(db, 'users', uid), {
+    displayName: displayName.slice(0, 80), email, role, status,
     createdAt: serverTimestamp(), updatedAt: serverTimestamp()
   });
 }

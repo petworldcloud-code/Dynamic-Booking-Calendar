@@ -47,10 +47,10 @@ describe('bookings', () => {
   it('denies unauthenticated read', async () => {
     await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'bookings', 'b1')));
   });
-  it('denies pending, suspended and unverified users', async () => {
+  it('denies pending, suspended and profile-less users', async () => {
     await assertFails(getDoc(doc(ctx('pat'), 'bookings', 'b1')));
     await assertFails(getDoc(doc(ctx('sam'), 'bookings', 'b1')));
-    await assertFails(getDoc(doc(ctx('alice', { email_verified: false }), 'bookings', 'b1')));
+    await assertFails(getDoc(doc(ctx('stranger'), 'bookings', 'b1')));
   });
   it('allows active users to read', async () => {
     await assertSucceeds(getDocs(collection(ctx('bob'), 'bookings')));
@@ -90,15 +90,15 @@ describe('users', () => {
     displayName: 'New', email: `${uid}@x.com`, role: 'user', status: 'pending',
     createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...over
   });
-  it('self-creates pending user profile', async () => {
-    await assertSucceeds(setDoc(doc(ctx('newbie'), 'users', 'newbie'), profile('newbie')));
+  it('nobody can self-register a profile', async () => {
+    await assertFails(setDoc(doc(ctx('newbie'), 'users', 'newbie'), profile('newbie')));
+    await assertFails(setDoc(doc(ctx('newbie'), 'users', 'newbie'), profile('newbie', { role: 'admin', status: 'active' })));
   });
-  it('refuses self-created admin or active profile', async () => {
-    await assertFails(setDoc(doc(ctx('newbie'), 'users', 'newbie'), profile('newbie', { role: 'admin' })));
-    await assertFails(setDoc(doc(ctx('newbie'), 'users', 'newbie'), profile('newbie', { status: 'active' })));
+  it('active standard users cannot create profiles', async () => {
+    await assertFails(setDoc(doc(ctx('alice'), 'users', 'x'), profile('x', { status: 'active' })));
   });
-  it('refuses creating someone else profile', async () => {
-    await assertFails(setDoc(doc(ctx('newbie'), 'users', 'other'), profile('other')));
+  it('admin can create a profile for a new account', async () => {
+    await assertSucceeds(setDoc(doc(ctx('admin'), 'users', 'newbie'), profile('newbie', { status: 'active' })));
   });
   it('blocks role/status escalation by the user', async () => {
     await assertFails(updateDoc(doc(ctx('pat'), 'users', 'pat'), { status: 'active', updatedAt: serverTimestamp() }));
