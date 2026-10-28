@@ -192,10 +192,9 @@ function actionButtons(b) {
 
 function drawTable() {
   const q = $('q').value.trim().toLowerCase();
-  const from = $('f-from').value; const to = $('f-to').value;
   const sort = $('sort').value;
   let list = state.listBookings.filter((b) =>
-    (!q || b.eventName.toLowerCase().includes(q)) && (!from || b.bookingDate >= from) && (!to || b.bookingDate <= to));
+    (!q || b.eventName.toLowerCase().includes(q)));
   if (sort === 'name') list = [...list].sort((a, b) => a.eventName.localeCompare(b.eventName));
   else {
     const dir = sort === 'desc' ? -1 : 1;
@@ -427,8 +426,7 @@ function wire() {
   $('nav-next').onclick = () => shift(RANGE_DAYS);
   $('nav-today').onclick = () => { state.viewStart = null; startRange(); };
 
-  ['q', 'f-from', 'f-to', 'sort'].forEach((id) => $(id).addEventListener('input', drawTable));
-  $('f-clear').onclick = () => { $('q').value = ''; $('f-from').value = ''; $('f-to').value = ''; $('sort').value = 'asc'; drawTable(); };
+  ['q', 'sort'].forEach((id) => $(id).addEventListener('input', drawTable));
   const setTab = (t) => {
     state.tab = t; state.limit = PAGE;
     $('tab-up').classList.toggle('on', t === 'up'); $('tab-hist').classList.toggle('on', t === 'hist');

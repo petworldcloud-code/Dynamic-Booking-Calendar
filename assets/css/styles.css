@@ -62,8 +62,6 @@ button { font: inherit; cursor: pointer; }
 /* table */
 .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 10px 4px; }
 .tools input[type=search] { grid-column: 1 / -1; }
-.flt { font-size: .78rem; color: var(--muted); display: block; }
-.flt input { margin-top: 2px; }
 input, select, textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; width: 100%; background: #fff; color: var(--text); }
 .tabs { display: flex; gap: 6px; padding: 6px 10px; align-items: center; }
 .tab { background: var(--lavender); border: 1px solid var(--border); border-radius: 6px; padding: 4px 12px; color: var(--purple); }
