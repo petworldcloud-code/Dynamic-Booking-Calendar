@@ -16,7 +16,7 @@ const real = {
   changePassword: auth.changePassword,
   watchRange: bookings.watchRange, watchList: bookings.watchList,
   createBooking: bookings.createBooking, updateBooking: bookings.updateBooking,
-  deleteBooking: bookings.deleteBooking, millis: bookings.millis,
+  deleteBooking: bookings.deleteBooking, millis: bookings.millis, getAttachment: bookings.getAttachment,
   watchUsers: users.watchUsers, updateUser: users.updateUser,
   getRetention: retention.getRetention, saveRetention: retention.saveRetention
 };

@@ -35,10 +35,8 @@ async function main() {
   }
   let deleted = 0;
   for (let i = 0; i < snap.docs.length; i += BATCH) {
-    const batch = db.batch();
-    snap.docs.slice(i, i + BATCH).forEach((d) => batch.delete(d.ref));
-    await batch.commit();
-    deleted += Math.min(BATCH, snap.docs.length - i);
+    // recursiveDelete also removes each booking's attachments subcollection
+    for (const d of snap.docs.slice(i, i + BATCH)) { await db.recursiveDelete(d.ref); deleted += 1; }
   }
   console.log(`Deleted ${deleted} bookings.`);
 }

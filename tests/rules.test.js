@@ -11,7 +11,7 @@ const ctx = (uid, extra = {}) =>
   env.authenticatedContext(uid, { email: `${uid}@x.com`, email_verified: true, ...extra }).firestore();
 
 const booking = (uid, over = {}) => ({
-  bookingDate: '2026-10-27', eventName: 'Tefal', notes: '',
+  bookingDate: '2026-10-27', eventName: 'Tefal', notes: '', truckType: '40footer', truckCount: 2,
   createdBy: uid, createdByName: uid, createdAt: serverTimestamp(),
   updatedBy: uid, updatedByName: uid, updatedAt: serverTimestamp(), ...over
 });
@@ -37,7 +37,7 @@ beforeEach(async () => {
     await mk('pat', 'user', 'pending');
     await mk('sam', 'user', 'suspended');
     await setDoc(doc(db, 'bookings', 'b1'), {
-      bookingDate: '2026-10-27', eventName: 'Seed', createdBy: 'alice', createdByName: 'alice',
+      bookingDate: '2026-10-27', eventName: 'Seed', truckType: '5ton', truckCount: 1, createdBy: 'alice', createdByName: 'alice',
       createdAt: new Date(), updatedBy: 'alice', updatedByName: 'alice', updatedAt: new Date()
     });
   });
@@ -64,6 +64,9 @@ describe('bookings', () => {
     await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'n4'), booking('bob', { eventName: '' })));
     await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'n5'), booking('bob', { eventName: 'x'.repeat(121) })));
     await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'n6'), booking('bob', { extra: 1 })));
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'n7'), booking('bob', { truckType: '2ton' })));
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'n8'), booking('bob', { truckCount: 7 })));
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'n9'), booking('bob', { truckCount: 0 })));
   });
   it('creator and admin can update; others cannot', async () => {
     const upd = (uid) => ({ eventName: 'Changed', updatedBy: uid, updatedByName: uid, updatedAt: serverTimestamp() });
@@ -137,5 +140,27 @@ describe('usernames', () => {
     await assertFails(setDoc(doc(ctx('admin'), 'usernames', 'A'), { email: 'c@x.com', uid: 'c' }));
     await assertFails(setDoc(doc(ctx('alice'), 'usernames', 'dave'), { email: 'd@x.com', uid: 'd' }));
     await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), 'usernames', 'eve'), { email: 'e@x.com', uid: 'e' }));
+  });
+});
+
+describe('attachments', () => {
+  const att = (uid, over = {}) => ({ name: 'a.jpg', type: 'image/jpeg', size: 1000, data: 'AAAA', createdBy: uid, createdAt: serverTimestamp(), ...over });
+  it('creator and admin can add; others cannot', async () => {
+    await assertSucceeds(setDoc(doc(ctx('alice'), 'bookings/b1/attachments', 'x1'), att('alice')));
+    await assertSucceeds(setDoc(doc(ctx('admin'), 'bookings/b1/attachments', 'x2'), att('admin')));
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings/b1/attachments', 'x3'), att('bob')));
+  });
+  it('rejects oversize files', async () => {
+    await assertFails(setDoc(doc(ctx('alice'), 'bookings/b1/attachments', 'x4'), att('alice', { size: 700000 })));
+  });
+  it('all active users can read, outsiders cannot', async () => {
+    await env.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), 'bookings/b1/attachments', 'x5'), { name: 'a', type: 'image/jpeg', size: 1, data: 'A' }));
+    await assertSucceeds(getDoc(doc(ctx('bob'), 'bookings/b1/attachments', 'x5')));
+    await assertFails(getDoc(doc(ctx('pat'), 'bookings/b1/attachments', 'x5')));
+  });
+  it('only creator/admin can delete', async () => {
+    await env.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), 'bookings/b1/attachments', 'x6'), { name: 'a', type: 'image/jpeg', size: 1, data: 'A' }));
+    await assertFails(deleteDoc(doc(ctx('bob'), 'bookings/b1/attachments', 'x6')));
+    await assertSucceeds(deleteDoc(doc(ctx('alice'), 'bookings/b1/attachments', 'x6')));
   });
 });

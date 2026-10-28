@@ -94,7 +94,29 @@
       <h3 id="dlg-booking-title">Add Booking</h3>
       <label>Date <input id="b-date" type="date" required></label>
       <label>Event name <input id="b-name" type="text" maxlength="120" required></label>
+      <div class="row2">
+        <label>Type of truck
+          <select id="b-truck" required>
+            <option value="">Select…</option>
+            <option>40footer</option><option>20footer</option><option>10ton</option>
+            <option>5ton</option><option>3ton</option><option>1ton</option>
+          </select>
+        </label>
+        <label>Number of trucks
+          <select id="b-count" required>
+            <option value="">Select…</option>
+            <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option>
+          </select>
+        </label>
+      </div>
       <label>Notes (optional) <textarea id="b-notes" maxlength="1000" rows="3"></textarea></label>
+      <div class="attach">
+        <label id="b-files-label">Attachments (pictures, PDF, Word/Excel; up to 5 files)
+          <input id="b-files" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt">
+        </label>
+        <p class="meta">Pictures are shrunk automatically. Other files must be under 600 KB.</p>
+        <ul id="b-attlist" class="attlist"></ul>
+      </div>
       <p id="b-meta" class="meta"></p>
       <p id="b-error" class="error" role="alert" hidden></p>
       <div class="dlg-actions">

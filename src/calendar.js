@@ -57,9 +57,10 @@ export function renderCalendar(root, { start, today, bookings }, handlers) {
           }, h('span', {}, formatDisplay(iso)), isToday ? h('span', { class: 'today-dot', title: 'Today' }) : null),
           h('div', { class: 'cal-events' },
             shown.map((b) => h('button', {
-              class: `evt tone-${toneFor(b.eventName)}`, type: 'button', title: b.eventName,
+              class: `evt tone-${toneFor(b.eventName)}`, type: 'button',
+              title: `${b.eventName}${b.truckType ? ` — ${b.truckType} × ${b.truckCount}` : ''}${b.attachments?.length ? ` — ${b.attachments.length} attachment(s)` : ''}`,
               onclick: () => handlers.onBooking(b)
-            }, b.eventName)),
+            }, b.eventName, b.truckType ? h('span', { class: 'evt-truck' }, ` ${b.truckCount}×${b.truckType}`) : null)),
             extra > 0 ? h('button', {
               class: 'evt-more', type: 'button', onclick: () => handlers.onDay(iso, list)
             }, `+${extra} more booking${extra > 1 ? 's' : ''}`) : null));

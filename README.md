@@ -50,6 +50,9 @@ npm run test:rules       # Firestore rules tests (needs Java for the emulator)
 - **History**: the History tab lists bookings before today. Nothing is deleted when the calendar moves on.
 - **Retention**: permanent deletion is off by default. Admin sets days (default 90) in **Retention**.
 
+## Booking fields and attachments
+Each booking has one date, an event name, **type of truck** (40footer, 20footer, 10ton, 5ton, 3ton, 1ton), **number of trucks** (1-6), optional notes and up to 5 attachments. Attachments (pictures, PDF, Word/Excel, CSV/TXT) are stored in Firestore under `bookings/{id}/attachments` because Firebase Storage needs a paid plan. Each file must be under 600 KB; pictures are shrunk automatically in the browser. Deleting a booking deletes its attachments. If you later upgrade to the Blaze plan, Storage can replace this.
+
 ## Optional scheduled cleanup
 Off unless the repo variable `CLEANUP_ENABLED=true`. Even then it is a dry run unless `CLEANUP_DELETE=true` **and** an admin ticks "Allow permanent deletion" in the app. It uses GitHub OIDC + Google Workload Identity Federation (no key files): create a service account with only `roles/datastore.user`, a workload identity pool restricted to this repo and `refs/heads/main`, then set variables `GCP_WORKLOAD_IDENTITY_PROVIDER` and `GCP_SERVICE_ACCOUNT`. Test with dummy data first (`workflow_dispatch`, dry run). To disable: set `CLEANUP_ENABLED` to `false` or untick the setting in the app.
 

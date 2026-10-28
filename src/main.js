@@ -1,5 +1,6 @@
 import { api, DEMO, CONFIGURED } from './api.js';
 import { renderCalendar, h } from './calendar.js';
+import { prepareFile, base64ToBlobUrl, formatSize, MAX_FILES } from './attachments.js';
 import {
   todayISO, addDays, buildRange, formatDisplay, isValidISO, watchToday, RANGE_DAYS
 } from './date-utils.js';
@@ -177,6 +178,11 @@ function drawCalendar() {
   });
 }
 
+const bookingInfo = (b) => [
+  b.truckType ? `${b.truckType} × ${b.truckCount}` : null,
+  b.attachments?.length ? `📎 ${b.attachments.length}` : null
+].filter(Boolean).join(' · ');
+
 function actionButtons(b) {
   if (!canEdit(b)) return h('span', { class: 'muted', title: 'Only the creator or an administrator can change this booking' }, '—');
   return h('span', { class: 'acts' },
@@ -199,7 +205,8 @@ function drawTable() {
   $('rows').replaceChildren(...list.map((b, i) => h('tr', {},
     h('td', { class: 'c-n' }, String(i + 1)),
     h('td', { class: 'c-d' }, formatDisplay(b.bookingDate)),
-    h('td', {}, h('button', { class: 'cell-link', type: 'button', title: `Added by ${b.createdByName}`, onclick: () => openBookingDialog(b) }, b.eventName)),
+    h('td', {}, h('button', { class: 'cell-link', type: 'button', title: `Added by ${b.createdByName}`, onclick: () => openBookingDialog(b) }, b.eventName),
+      h('span', { class: 'sub' }, bookingInfo(b))),
     h('td', { class: 'c-a' }, actionButtons(b)))));
   $('empty').hidden = list.length > 0;
 }
@@ -210,7 +217,7 @@ function drawDay() {
   const list = state.calBookings.filter((b) => b.bookingDate === state.dayISO);
   $('day-title').textContent = `${formatDisplay(state.dayISO)} — ${list.length} booking${list.length === 1 ? '' : 's'}`;
   $('day-list').replaceChildren(...(list.length ? list.map((b) => h('li', {},
-    h('div', {}, h('strong', {}, b.eventName), h('small', {}, ` · by ${b.createdByName}`)),
+    h('div', {}, h('strong', {}, b.eventName), h('small', {}, ` · by ${b.createdByName}`), h('span', { class: 'sub' }, bookingInfo(b))),
     actionButtons(b))) : [h('li', { class: 'muted' }, 'No bookings on this date.')]));
 }
 
@@ -226,8 +233,14 @@ function openBookingDialog(b, presetDate) {
   $('b-date').value = editing ? b.bookingDate : (presetDate || state.today);
   $('b-name').value = editing ? b.eventName : '';
   $('b-notes').value = editing ? (b.notes || '') : '';
+  $('b-truck').value = editing ? (b.truckType || '') : '';
+  $('b-count').value = editing && b.truckCount ? String(b.truckCount) : '';
+  state.files = { bookingId: editing ? b.id : null, existing: editing ? [...(b.attachments || [])] : [], remove: [], add: [] };
+  $('b-files').value = '';
   const ro = editing && !canEdit(b);
-  ['b-date', 'b-name', 'b-notes'].forEach((id) => { $(id).disabled = ro; });
+  ['b-date', 'b-name', 'b-notes', 'b-truck', 'b-count', 'b-files'].forEach((id) => { $(id).disabled = ro; });
+  state.files.readOnly = ro;
+  drawAttachments();
   $('b-save').hidden = ro;
   $('b-meta').textContent = editing ? `Created by ${b.createdByName}. Last changed by ${b.updatedByName}.` : '';
   $('b-error').hidden = true;
@@ -235,16 +248,80 @@ function openBookingDialog(b, presetDate) {
   dlg.showModal();
 }
 
+// ---------- attachments in the booking dialog ----------
+const thumbCache = new Map(); // "bookingId/attId" -> object URL
+
+async function openAttachment(bookingId, a) {
+  const w = window.open('', '_blank'); // opened synchronously so pop-up blockers allow it
+  try {
+    const doc = await api.getAttachment(bookingId, a.id);
+    if (!doc) throw new Error('Attachment not found.');
+    const url = base64ToBlobUrl(doc.data, doc.type);
+    if (a.type.startsWith('image/') || a.type === 'application/pdf') { if (w) w.location = url; } else {
+      w?.close(); const link = h('a', { href: url, download: a.name }); document.body.append(link); link.click(); link.remove();
+    }
+  } catch (x) { w?.close(); toast(friendly(x), 'err'); }
+}
+
+async function loadThumb(bookingId, a, img) {
+  const key = `${bookingId}/${a.id}`;
+  try {
+    if (!thumbCache.has(key)) {
+      const doc = await api.getAttachment(bookingId, a.id);
+      if (!doc) return;
+      thumbCache.set(key, base64ToBlobUrl(doc.data, doc.type));
+    }
+    img.src = thumbCache.get(key);
+  } catch { /* thumbnail is optional */ }
+}
+
+function drawAttachments() {
+  const f = state.files; const ul = $('b-attlist');
+  const items = [];
+  for (const a of f.existing.filter((x) => !f.remove.includes(x.id))) {
+    const isImg = a.type.startsWith('image/');
+    const thumb = isImg ? h('img', { alt: '', width: 40, height: 40 }) : h('span', { class: 'ph' }, (a.name.split('.').pop() || 'file').slice(0, 4));
+    if (isImg) loadThumb(f.bookingId, a, thumb);
+    items.push(h('li', {}, thumb,
+      h('button', { type: 'button', class: 'link nm', onclick: () => openAttachment(f.bookingId, a) }, `${a.name} (${formatSize(a.size)})`),
+      f.readOnly ? null : h('button', { type: 'button', class: 'icon danger-text', onclick: () => { f.remove.push(a.id); drawAttachments(); } }, 'Remove')));
+  }
+  for (const a of f.add) {
+    items.push(h('li', {}, h('span', { class: 'ph' }, (a.name.split('.').pop() || 'file').slice(0, 4)),
+      h('span', { class: 'nm' }, `${a.name} (${formatSize(a.size)}) `, h('span', { class: 'new' }, 'new')),
+      h('button', { type: 'button', class: 'icon danger-text', onclick: () => { f.add = f.add.filter((x) => x.id !== a.id); drawAttachments(); } }, 'Remove')));
+  }
+  ul.replaceChildren(...items);
+  if (f.readOnly && !items.length) ul.append(h('li', { class: 'muted' }, 'No attachments.'));
+}
+
+async function addPickedFiles(fileList) {
+  const f = state.files; const err = $('b-error'); err.hidden = true;
+  const current = () => f.existing.filter((x) => !f.remove.includes(x.id)).length + f.add.length;
+  for (const file of fileList) {
+    if (current() >= MAX_FILES) { err.textContent = `You can attach up to ${MAX_FILES} files.`; err.hidden = false; break; }
+    try { f.add.push(await prepareFile(file)); } catch (x) { err.textContent = x.message; err.hidden = false; }
+  }
+  $('b-files').value = '';
+  drawAttachments();
+}
+
 async function saveBooking(e) {
   e.preventDefault();
   const err = $('b-error');
-  const f = { bookingDate: $('b-date').value, eventName: $('b-name').value.trim(), notes: $('b-notes').value.trim() };
+  const f = {
+    bookingDate: $('b-date').value, eventName: $('b-name').value.trim(), notes: $('b-notes').value.trim(),
+    truckType: $('b-truck').value, truckCount: Number($('b-count').value)
+  };
   if (!isValidISO(f.bookingDate)) { err.textContent = 'Choose a valid date.'; err.hidden = false; return; }
   if (!f.eventName) { err.textContent = 'Event name is required.'; err.hidden = false; return; }
+  if (!f.truckType) { err.textContent = 'Choose the type of truck.'; err.hidden = false; return; }
+  if (!(f.truckCount >= 1 && f.truckCount <= 6)) { err.textContent = 'Choose the number of trucks (1-6).'; err.hidden = false; return; }
   const btn = $('b-save'); btn.disabled = true; btn.textContent = 'Saving…'; err.hidden = true;
   try {
-    if (state.editing) await api.updateBooking(me(), state.editing.id, state.editing.expectedMs, f);
-    else await api.createBooking(me(), f);
+    const { add, remove } = state.files;
+    if (state.editing) await api.updateBooking(me(), state.editing.id, state.editing.expectedMs, f, { add, remove });
+    else await api.createBooking(me(), f, add);
     $('dlg-booking').close();
     toast(state.editing ? 'Booking updated.' : 'Booking added.'); // only after the server confirmed
   } catch (x) {
@@ -266,7 +343,7 @@ function confirmDelete(b) {
   const dlg = $('dlg-confirm');
   $('cf-yes').onclick = async () => {
     $('cf-yes').disabled = true;
-    try { await api.deleteBooking(b.id); dlg.close(); toast('Booking deleted.'); } catch (x) { toast(friendly(x), 'err'); } finally { $('cf-yes').disabled = false; }
+    try { await api.deleteBooking(b); dlg.close(); toast('Booking deleted.'); } catch (x) { toast(friendly(x), 'err'); } finally { $('cf-yes').disabled = false; }
   };
   $('cf-no').onclick = () => dlg.close();
   dlg.showModal();
@@ -304,6 +381,7 @@ function wire() {
   $('day-add').onclick = () => openBookingDialog(null, state.dayISO);
   $('day-close').onclick = () => $('dlg-day').close();
   $('b-cancel').onclick = () => $('dlg-booking').close();
+  $('b-files').onchange = (e) => addPickedFiles([...e.target.files]);
   $('form-booking').onsubmit = saveBooking;
   $('btn-logout').onclick = () => api.logout();
   $('btn-password').onclick = () => { $('form-password').reset(); $('pw-error').hidden = true; $('dlg-password').showModal(); };

@@ -44,12 +44,15 @@ service cloud.firestore {
 
     // ---------- bookings ----------
     function validBookingShape(d) {
-      return d.keys().hasAll(['bookingDate', 'eventName', 'createdBy', 'createdByName', 'createdAt', 'updatedBy', 'updatedByName', 'updatedAt'])
-        && d.keys().hasOnly(['bookingDate', 'eventName', 'notes', 'createdBy', 'createdByName', 'createdAt', 'updatedBy', 'updatedByName', 'updatedAt'])
+      return d.keys().hasAll(['bookingDate', 'eventName', 'truckType', 'truckCount', 'createdBy', 'createdByName', 'createdAt', 'updatedBy', 'updatedByName', 'updatedAt'])
+        && d.keys().hasOnly(['bookingDate', 'eventName', 'notes', 'truckType', 'truckCount', 'attachments', 'createdBy', 'createdByName', 'createdAt', 'updatedBy', 'updatedByName', 'updatedAt'])
         && d.bookingDate is string
         && d.bookingDate.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
         && d.eventName is string && d.eventName.size() > 0 && d.eventName.size() <= 120
         && (!('notes' in d) || (d.notes is string && d.notes.size() <= 1000))
+        && d.truckType in ['40footer', '20footer', '10ton', '5ton', '3ton', '1ton']
+        && d.truckCount is int && d.truckCount >= 1 && d.truckCount <= 6
+        && (!('attachments' in d) || (d.attachments is list && d.attachments.size() <= 5))
         && d.createdByName is string && d.createdByName.size() <= 80
         && d.updatedByName is string && d.updatedByName.size() <= 80;
     }
@@ -75,6 +78,23 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
 
       allow delete: if isActive() && (isOwner(resource.data) || isAdmin());
+
+      // File attachments live in Firestore (Storage needs a paid plan); max ~600 KB each.
+      match /attachments/{aid} {
+        allow read: if isActive();
+        allow create: if isActive()
+          && (getAfter(/databases/$(database)/documents/bookings/$(id)).data.createdBy == request.auth.uid || isAdmin())
+          && request.resource.data.keys().hasOnly(['name', 'type', 'size', 'data', 'createdBy', 'createdAt'])
+          && request.resource.data.name is string && request.resource.data.name.size() <= 100
+          && request.resource.data.type is string && request.resource.data.type.size() <= 100
+          && request.resource.data.size is int && request.resource.data.size <= 614400
+          && request.resource.data.data is string && request.resource.data.data.size() <= 840000
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow delete: if isActive()
+          && (get(/databases/$(database)/documents/bookings/$(id)).data.createdBy == request.auth.uid || isAdmin());
+        allow update: if false;
+      }
     }
 
     // ---------- settings ----------

@@ -14,6 +14,7 @@ function mk(dayOffset, eventName, n = 0) {
   seq += 1;
   return {
     id: `d${String(seq).padStart(3, '0')}`, bookingDate: addDays(todayISO(), dayOffset), eventName, notes: '',
+    truckType: ['40footer', '20footer', '10ton', '5ton', '3ton', '1ton'][seq % 6], truckCount: (seq % 6) + 1, attachments: [],
     createdBy: me.uid, createdByName: me.displayName, updatedBy: me.uid, updatedByName: me.displayName,
     createdAt: { toMillis: () => 1000 + seq }, updatedAt: { toMillis: () => 1000 + seq + n }
   };
@@ -39,14 +40,17 @@ export const api = {
       cb(l.slice(0, max));
     });
   },
-  async createBooking(user, f) { seq += 1; rows.push({ ...mk(0, f.eventName), ...f, id: `d${seq}x` }); notify(); },
+  async createBooking(user, f, files = []) {
+    seq += 1; rows.push({ ...mk(0, f.eventName), ...f, attachments: files.map(({ id, name, type, size }) => ({ id, name, type, size })), id: `d${seq}x` }); notify();
+  },
+  getAttachment: async () => null,
   async updateBooking(user, id, expected, f) {
     const r = rows.find((x) => x.id === id);
     if (!r) throw Object.assign(new Error('This booking no longer exists.'), { code: 'gone' });
     if (r.updatedAt.toMillis() !== expected) throw Object.assign(new Error('Someone else changed this booking.'), { code: 'conflict' });
     seq += 1; Object.assign(r, f, { updatedAt: { toMillis: () => 5000 + seq } }); notify();
   },
-  async deleteBooking(id) { rows = rows.filter((r) => r.id !== id); notify(); },
+  async deleteBooking(b) { rows = rows.filter((r) => r.id !== b.id); notify(); },
   millis: (t) => (t && t.toMillis ? t.toMillis() : 0),
   watchUsers(cb) {
     cb([{ ...profile }, { uid: 'u2', displayName: 'Pending Person', email: 'pending@example.com', role: 'user', status: 'pending' }]);
