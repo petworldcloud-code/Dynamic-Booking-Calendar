@@ -277,7 +277,10 @@ function openBookingDialog(b, presetDate) {
   $('b-files').value = '';
   const ro = editing && !canEdit(b);
   ['b-date', 'b-company', 'b-notes', 'b-truck', 'b-count', 'b-files'].forEach((id) => { $(id).disabled = ro; });
-  if (!isAdmin()) $('b-company').disabled = true; // company is filled in automatically
+  // Standard users: company is fixed to their own and shown as plain text, not a choice.
+  $('b-company').hidden = !isAdmin();
+  $('b-company-fixed').hidden = isAdmin();
+  $('b-company-fixed').value = $('b-company').value;
   state.files.readOnly = ro;
   drawAttachments();
   $('b-save').hidden = ro;

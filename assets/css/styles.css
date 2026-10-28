@@ -171,3 +171,5 @@ dialog label input, dialog label textarea { margin-top: 3px; }
   .cal-row { grid-template-columns: 64px repeat(7, 120px); }
 }
 @media (prefers-reduced-motion: no-preference) { .evt, .tab, button { transition: filter .12s, background .12s; } }
+
+#b-company-fixed { background: var(--lavender); font-weight: 600; color: var(--text); cursor: default; }
