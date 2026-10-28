@@ -50,13 +50,14 @@
         <h2 id="t-title" class="panel-title">Booking Input Table</h2>
         <div class="tools">
           <input id="q" type="search" placeholder="Search event…" aria-label="Search by event name">
-          <label class="sr-only" for="f-from">From</label><input id="f-from" type="date" aria-label="From date">
-          <label class="sr-only" for="f-to">To</label><input id="f-to" type="date" aria-label="To date">
+          <label class="flt" for="f-from">Show from <input id="f-from" type="date"></label>
+          <label class="flt" for="f-to">Show until <input id="f-to" type="date"></label>
           <select id="sort" aria-label="Sort">
             <option value="asc">Date ↑</option>
             <option value="desc">Date ↓</option>
             <option value="name">Event A–Z</option>
           </select>
+          <button id="f-clear" class="ghost" type="button">Clear filters</button>
         </div>
         <div class="tabs" role="tablist">
           <button id="tab-up" role="tab" aria-selected="true" class="tab on" type="button">Upcoming</button>

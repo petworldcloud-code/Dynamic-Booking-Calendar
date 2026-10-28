@@ -428,6 +428,7 @@ function wire() {
   $('nav-today').onclick = () => { state.viewStart = null; startRange(); };
 
   ['q', 'f-from', 'f-to', 'sort'].forEach((id) => $(id).addEventListener('input', drawTable));
+  $('f-clear').onclick = () => { $('q').value = ''; $('f-from').value = ''; $('f-to').value = ''; $('sort').value = 'asc'; drawTable(); };
   const setTab = (t) => {
     state.tab = t; state.limit = PAGE;
     $('tab-up').classList.toggle('on', t === 'up'); $('tab-hist').classList.toggle('on', t === 'hist');
