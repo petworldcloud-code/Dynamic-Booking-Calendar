@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dynamic Booking Calendar</title>
-  <meta name="description" content="Shared booking calendar with a rolling 42-day view.">
+  <meta name="description" content="Shared booking calendar with a rolling 31-day view.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3' y='5' width='18' height='16' rx='3' fill='%23675477'/%3E%3Crect x='3' y='5' width='18' height='5' fill='%23B96F8C'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./assets/css/styles.css">
 </head>
@@ -73,7 +73,7 @@
 
       <section class="panel cal-panel" aria-labelledby="c-title">
         <div class="panel-title cal-title">
-          <h2 id="c-title">Automatic Calendar <small>(Next 42 Days)</small></h2>
+          <h2 id="c-title">Automatic Calendar <small>(Next 31 Days)</small></h2>
           <div class="nav">
             <button id="nav-prev" type="button" aria-label="Previous period">‹ Prev</button>
             <button id="nav-today" type="button">Today</button>
@@ -81,7 +81,7 @@
           </div>
         </div>
         <div id="loading" class="loading">Loading bookings…</div>
-        <div id="cal" class="cal" role="grid" aria-label="42-day booking calendar"></div>
+        <div id="cal" class="cal" role="grid" aria-label="31-day booking calendar"></div>
       </section>
     </div>
   </div>

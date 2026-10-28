@@ -1,7 +1,7 @@
 // Date helpers. All booking dates are date-only "YYYY-MM-DD" strings; arithmetic is done
 // on UTC-midnight Date objects purely as a calendar calculator (never on local time).
 export const TIMEZONE = 'Asia/Kuala_Lumpur';
-export const RANGE_DAYS = 42;
+export const RANGE_DAYS = 31;
 export const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -57,9 +57,9 @@ export function formatDisplay(iso) {
 }
 
 /**
- * Build the rolling period: 42 consecutive dates starting at `startISO`.
+ * Build the rolling period: 31 consecutive dates starting at `startISO`.
  * Returned as week rows of 7 cells (Mon..Sun); cells before the start date are null
- * placeholders, so no date is dropped (up to 7 rows when the start is mid-week).
+ * placeholders, so no date is dropped (up to 6 rows when the start is mid-week).
  */
 export function buildRange(startISO, days = RANGE_DAYS) {
   const dates = Array.from({ length: days }, (_, i) => addDays(startISO, i));

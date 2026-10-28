@@ -1,6 +1,6 @@
 # Dynamic Booking Calendar
 
-Static site (Vite + vanilla JS) hosted on **GitHub Pages**, using **Firebase Authentication** and **Cloud Firestore**. Shows a rolling 42-day calendar starting today (Asia/Kuala_Lumpur), a booking table, multi-user live sync, admin approval of users, and booking history.
+Static site (Vite + vanilla JS) hosted on **GitHub Pages**, using **Firebase Authentication** and **Cloud Firestore**. Shows a rolling 31-day calendar starting today (Asia/Kuala_Lumpur), a booking table, multi-user live sync, admin approval of users, and booking history.
 
 Repo: https://github.com/petworldcloud-code/Dynamic-Booking-Calendar
 Site (after setup): https://petworldcloud-code.github.io/Dynamic-Booking-Calendar/
@@ -43,7 +43,7 @@ npm run test:rules       # Firestore rules tests (needs Java for the emulator)
 `VITE_DEMO_MODE=demo` runs the UI on an in-memory mock with sample data (layout checks only; clearly bannered, never used in the deployed build).
 
 ## How it behaves
-- **Calendar**: 42 consecutive dates from today in Malaysia time; rows are Mon–Sun, so a mid-week start leaves blank leading cells (up to 7 rows). Prev/Next shifts by 42 days; Today restores the rolling view. At Malaysian midnight (and on tab focus/wake) the date is recomputed from the timezone.
+- **Calendar**: 31 consecutive dates from today in Malaysia time; rows are Mon–Sun, so a mid-week start leaves blank leading cells (up to 6 rows). Prev/Next shifts by 31 days; Today restores the rolling view. At Malaysian midnight (and on tab focus/wake) the date is recomputed from the timezone.
 - **Overflow**: 6 labels per day, then `+N more bookings` opening a day detail view. All records are kept.
 - **Live sync**: one range `onSnapshot` for the calendar and one for the table. Success messages appear only after the server confirms the write (15 s timeout otherwise). Edits use a transaction that rejects stale versions (conflict message with a "Load latest version" link).
 - **Roles**: admins manage everything; standard users edit/delete only their own bookings. Enforced in `firestore.rules`. Users without an active profile (or suspended) cannot read bookings.

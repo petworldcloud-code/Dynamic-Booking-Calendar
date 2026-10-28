@@ -26,26 +26,26 @@ describe('date utils', () => {
     expect(addDays('2028-02-28', 1)).toBe('2028-02-29');
   });
 
-  it('builds 42 consecutive dates ending 41 days later, none dropped', () => {
+  it('builds 31 consecutive dates ending 30 days later, none dropped', () => {
     const r = buildRange('2026-10-27');
-    expect(r.dates).toHaveLength(42);
-    expect(r.end).toBe('2026-12-07');
-    expect(r.weeks.flat().filter(Boolean)).toHaveLength(42);
+    expect(r.dates).toHaveLength(31);
+    expect(r.end).toBe('2026-11-26');
+    expect(r.weeks.flat().filter(Boolean)).toHaveLength(31);
   });
 
   it('places the start date under the right weekday with leading blanks', () => {
     const r = buildRange('2026-10-27'); // Tuesday
     expect(r.weeks[0][0]).toBeNull();
     expect(r.weeks[0][1]).toBe('2026-10-27');
-    expect(r.weeks).toHaveLength(7);
+    expect(r.weeks).toHaveLength(5);
     r.weeks.forEach((w) => w.forEach((d, i) => {
       if (d) expect(weekdayName(d)).toBe(['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'][i]);
     }));
   });
 
-  it('Monday start gives exactly 6 full rows', () => {
+  it('Monday start gives 5 rows', () => {
     const r = buildRange('2026-10-26');
-    expect(r.weeks).toHaveLength(6);
+    expect(r.weeks).toHaveLength(5);
     expect(r.weeks[0][0]).toBe('2026-10-26');
   });
 
@@ -55,7 +55,7 @@ describe('date utils', () => {
     setClock(new Date('2026-10-27T16:00:01Z'));
     const r = buildRange(todayISO());
     expect(r.start).toBe('2026-10-28');
-    expect(r.end).toBe('2026-12-08');
+    expect(r.end).toBe('2026-11-27');
   });
 
   it('computes time to next Malaysian midnight', () => {
