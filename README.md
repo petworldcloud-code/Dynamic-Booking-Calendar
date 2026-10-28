@@ -6,6 +6,8 @@ Repo: https://github.com/petworldcloud-code/Dynamic-Booking-Calendar
 Site (after setup): https://petworldcloud-code.github.io/Dynamic-Booking-Calendar/
 
 ## Status
+Firebase project `dynamic-booking-calendar` (Singapore, asia-southeast1) is created with Email/Password auth, rules and the bookings index in place; GitHub variables and Pages source are set. Remaining: first admin bootstrap.
+
 See [Test report](#test-report) for what has and has not been verified. Nothing here has been deployed or connected to a real Firebase project until you complete the setup below.
 
 ## Firebase setup
