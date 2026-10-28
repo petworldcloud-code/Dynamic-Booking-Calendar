@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+    function verified() { return signedIn() && request.auth.token.email_verified == true; }
+    function profile(uid) { return get(/databases/$(database)/documents/users/$(uid)).data; }
+    function hasProfile(uid) { return exists(/databases/$(database)/documents/users/$(uid)); }
+    function isActive() {
+      return verified() && hasProfile(request.auth.uid) && profile(request.auth.uid).status == 'active';
+    }
+    function isAdmin() { return isActive() && profile(request.auth.uid).role == 'admin'; }
+    function isOwner(data) { return data.createdBy == request.auth.uid; }
+
+    // ---------- users ----------
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+
+      // Self-registration: own doc only, always role=user, status=pending.
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['displayName', 'email', 'role', 'status', 'createdAt', 'updatedAt'])
+        && request.resource.data.role == 'user'
+        && request.resource.data.status == 'pending'
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 80
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      // Users may change only their display name; admins may change role/status.
+      allow update: if (signedIn() && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'updatedAt'])
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() > 0
+          && request.resource.data.displayName.size() <= 80)
+        || (isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'status', 'displayName', 'updatedAt'])
+          && request.resource.data.role in ['admin', 'user']
+          && request.resource.data.status in ['pending', 'active', 'suspended']);
+
+      allow delete: if false;
+    }
+
+    // ---------- bookings ----------
+    function validBookingShape(d) {
+      return d.keys().hasAll(['bookingDate', 'eventName', 'createdBy', 'createdByName', 'createdAt', 'updatedBy', 'updatedByName', 'updatedAt'])
+        && d.keys().hasOnly(['bookingDate', 'eventName', 'notes', 'createdBy', 'createdByName', 'createdAt', 'updatedBy', 'updatedByName', 'updatedAt'])
+        && d.bookingDate is string
+        && d.bookingDate.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && d.eventName is string && d.eventName.size() > 0 && d.eventName.size() <= 120
+        && (!('notes' in d) || (d.notes is string && d.notes.size() <= 1000))
+        && d.createdByName is string && d.createdByName.size() <= 80
+        && d.updatedByName is string && d.updatedByName.size() <= 80;
+    }
+
+    match /bookings/{id} {
+      allow read: if isActive();
+
+      allow create: if isActive()
+        && validBookingShape(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      // Creator or admin; creation metadata is immutable; updatedAt always set server-side.
+      allow update: if isActive()
+        && (isOwner(resource.data) || isAdmin())
+        && validBookingShape(request.resource.data)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdByName == resource.data.createdByName
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if isActive() && (isOwner(resource.data) || isAdmin());
+    }
+
+    // ---------- settings ----------
+    match /settings/{doc} {
+      allow read: if isActive();
+      allow write: if isAdmin()
+        && doc == 'retention'
+        && request.resource.data.keys().hasOnly(['autoDeleteEnabled', 'retentionDays', 'updatedAt', 'updatedBy'])
+        && request.resource.data.autoDeleteEnabled is bool
+        && request.resource.data.retentionDays is int
+        && request.resource.data.retentionDays >= 30
+        && request.resource.data.retentionDays <= 3650
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}

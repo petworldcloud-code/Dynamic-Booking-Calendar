@@ -1,0 +1,36 @@
+name: Cleanup expired bookings (optional)
+
+# Disabled by default. The scheduled run only does anything if the repository variable
+# CLEANUP_ENABLED is "true". Even then it is a DRY RUN unless CLEANUP_DELETE is "true"
+# AND the admin has switched on autoDeleteEnabled in the app (settings/retention).
+on:
+  schedule:
+    - cron: '0 18 * * *' # 18:00 UTC = 02:00 Asia/Kuala_Lumpur
+  workflow_dispatch:
+    inputs:
+      delete:
+        description: 'Actually delete (otherwise dry run)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write # for Workload Identity Federation (no stored keys)
+
+jobs:
+  cleanup:
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.CLEANUP_ENABLED == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - run: node scripts/cleanup.js
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          CLEANUP_DELETE: ${{ (github.event_name == 'workflow_dispatch' && inputs.delete) && 'true' || vars.CLEANUP_DELETE }}
