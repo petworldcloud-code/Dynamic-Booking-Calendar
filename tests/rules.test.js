@@ -11,7 +11,7 @@ const ctx = (uid, extra = {}) =>
   env.authenticatedContext(uid, { email: `${uid}@x.com`, email_verified: true, ...extra }).firestore();
 
 const booking = (uid, over = {}) => ({
-  bookingDate: '2026-10-27', eventName: 'Tefal', notes: '', truckType: '40footer', truckCount: 2,
+  bookingDate: '2026-10-27', eventName: uid, notes: '', truckType: '40footer', truckCount: 2,
   createdBy: uid, createdByName: uid, createdAt: serverTimestamp(),
   updatedBy: uid, updatedByName: uid, updatedAt: serverTimestamp(), ...over
 });
@@ -37,7 +37,7 @@ beforeEach(async () => {
     await mk('pat', 'user', 'pending');
     await mk('sam', 'user', 'suspended');
     await setDoc(doc(db, 'bookings', 'b1'), {
-      bookingDate: '2026-10-27', eventName: 'Seed', truckType: '5ton', truckCount: 1, createdBy: 'alice', createdByName: 'alice',
+      bookingDate: '2026-10-27', eventName: 'alice', truckType: '5ton', truckCount: 1, createdBy: 'alice', createdByName: 'alice',
       createdAt: new Date(), updatedBy: 'alice', updatedByName: 'alice', updatedAt: new Date()
     });
   });
@@ -69,7 +69,7 @@ describe('bookings', () => {
     await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'n9'), booking('bob', { truckCount: 0 })));
   });
   it('creator and admin can update; others cannot', async () => {
-    const upd = (uid) => ({ eventName: 'Changed', updatedBy: uid, updatedByName: uid, updatedAt: serverTimestamp() });
+    const upd = (uid, over = {}) => ({ notes: 'Changed', updatedBy: uid, updatedByName: uid, updatedAt: serverTimestamp(), ...over });
     await assertSucceeds(updateDoc(doc(ctx('alice'), 'bookings', 'b1'), upd('alice')));
     await assertSucceeds(updateDoc(doc(ctx('admin'), 'bookings', 'b1'), upd('admin')));
     await assertFails(updateDoc(doc(ctx('bob'), 'bookings', 'b1'), upd('bob')));
@@ -162,5 +162,34 @@ describe('attachments', () => {
     await env.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), 'bookings/b1/attachments', 'x6'), { name: 'a', type: 'image/jpeg', size: 1, data: 'A' }));
     await assertFails(deleteDoc(doc(ctx('bob'), 'bookings/b1/attachments', 'x6')));
     await assertSucceeds(deleteDoc(doc(ctx('alice'), 'bookings/b1/attachments', 'x6')));
+  });
+});
+
+describe('company name on bookings', () => {
+  it('standard user cannot book under another company name', async () => {
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'c1'), booking('bob', { eventName: 'alice' })));
+    await assertSucceeds(setDoc(doc(ctx('bob'), 'bookings', 'c2'), booking('bob')));
+  });
+  it('createdByName must match the profile company name', async () => {
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'c3'), booking('bob', { createdByName: 'someone else', eventName: 'someone else' })));
+  });
+  it('admin can book for a company', async () => {
+    await assertSucceeds(setDoc(doc(ctx('admin'), 'bookings', 'c4'), booking('admin', { eventName: 'alice' })));
+  });
+  it('standard user cannot rename the company on update, admin can', async () => {
+    const upd = (uid) => ({ eventName: 'other', updatedBy: uid, updatedByName: uid, updatedAt: serverTimestamp() });
+    await assertFails(updateDoc(doc(ctx('alice'), 'bookings', 'b1'), upd('alice')));
+    await assertSucceeds(updateDoc(doc(ctx('admin'), 'bookings', 'b1'), upd('admin')));
+  });
+});
+
+describe('user deletion', () => {
+  it('admin can delete another user but not themselves; users cannot', async () => {
+    await assertSucceeds(deleteDoc(doc(ctx('admin'), 'users', 'bob')));
+    await assertFails(deleteDoc(doc(ctx('admin'), 'users', 'admin')));
+    await assertFails(deleteDoc(doc(ctx('alice'), 'users', 'alice')));
+  });
+  it('admin can rename a company', async () => {
+    await assertSucceeds(updateDoc(doc(ctx('admin'), 'users', 'bob'), { displayName: 'Bob Co', username: 'bob', updatedAt: serverTimestamp() }));
   });
 });

@@ -68,7 +68,7 @@ export async function changePassword(oldPw, newPw) {
 export async function adminCreateUser({ name, email, password, role }) {
   const uname = usernameFromName(name);
   if (!USERNAME_RE.test(uname)) {
-    throw new Error('The name is used as the username, so it must be 3-30 characters using letters, numbers, spaces, dot, dash or underscore.');
+    throw new Error('The company name is used as the username, so it must be 3-30 characters using letters, numbers, spaces, dot, dash or underscore.');
   }
   const realEmail = (email || '').trim().toLowerCase();
   const authEmail = realEmail || `${uname}@${SYNTHETIC_DOMAIN}`;

@@ -17,7 +17,7 @@ const real = {
   watchRange: bookings.watchRange, watchList: bookings.watchList,
   createBooking: bookings.createBooking, updateBooking: bookings.updateBooking,
   deleteBooking: bookings.deleteBooking, millis: bookings.millis, getAttachment: bookings.getAttachment,
-  watchUsers: users.watchUsers, updateUser: users.updateUser,
+  watchUsers: users.watchUsers, updateUser: users.updateUser, deleteUser: users.deleteUser,
   getRetention: retention.getRetention, saveRetention: retention.saveRetention
 };
 

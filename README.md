@@ -51,7 +51,7 @@ npm run test:rules       # Firestore rules tests (needs Java for the emulator)
 - **Retention**: permanent deletion is off by default. Admin sets days (default 90) in **Retention**.
 
 ## Booking fields and attachments
-Each booking has one date, an event name, **type of truck** (40footer, 20footer, 10ton, 5ton, 3ton, 1ton), **number of trucks** (1-6), optional notes and up to 5 attachments. Attachments (pictures, PDF, Word/Excel, CSV/TXT) are stored in Firestore under `bookings/{id}/attachments` because Firebase Storage needs a paid plan. Each file must be under 600 KB; pictures are shrunk automatically in the browser. Deleting a booking deletes its attachments. If you later upgrade to the Blaze plan, Storage can replace this.
+Each booking has one date, a **company** (filled in automatically from the logged-in company's name; admins can pick any company to book for), **type of truck** (40footer, 20footer, 10ton, 5ton, 3ton, 1ton), **number of trucks** (1-6), optional notes and up to 5 attachments. Attachments (pictures, PDF, Word/Excel, CSV/TXT) are stored in Firestore under `bookings/{id}/attachments` because Firebase Storage needs a paid plan. Each file must be under 600 KB; pictures are shrunk automatically in the browser. Deleting a booking deletes its attachments. If you later upgrade to the Blaze plan, Storage can replace this.
 
 ## Optional scheduled cleanup
 Off unless the repo variable `CLEANUP_ENABLED=true`. Even then it is a dry run unless `CLEANUP_DELETE=true` **and** an admin ticks "Allow permanent deletion" in the app. It uses GitHub OIDC + Google Workload Identity Federation (no key files): create a service account with only `roles/datastore.user`, a workload identity pool restricted to this repo and `refs/heads/main`, then set variables `GCP_WORKLOAD_IDENTITY_PROVIDER` and `GCP_SERVICE_ACCOUNT`. Test with dummy data first (`workflow_dispatch`, dry run). To disable: set `CLEANUP_ENABLED` to `false` or untick the setting in the app.
@@ -72,3 +72,6 @@ Firebase's free tier has quotas, not unlimited use. Reads are limited by range q
 | A, B–F, I, J, K, M, N (real auth / Firestore / two users / persistence) | **Not run**: needs a real Firebase project |
 | O cleanup safeguards | Code written, **not run** against Firestore |
 | Q deployed GitHub Pages check | **Not done** until pushed and Pages enabled |
+
+## Companies (users)
+Users are companies. Admins can add, rename (**Edit**) and **Delete** them in the Users panel. Rename changes the display name only; the login username stays the same, and past bookings keep the name they were made under. Delete removes the profile and username mapping, so the login can no longer use the app; the Firebase login itself can only be removed in the Firebase Console. Clicking a company name on the calendar opens a pop-up with the truck type, number of lorries, notes and attachments.

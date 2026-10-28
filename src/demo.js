@@ -57,6 +57,7 @@ export const api = {
     return () => {};
   },
   async updateUser() {},
+  async deleteUser() {},
   getRetention: async () => ({ autoDeleteEnabled: false, retentionDays: 90 }),
   saveRetention: async () => {}
 };

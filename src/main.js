@@ -2,7 +2,7 @@ import { api, DEMO, CONFIGURED } from './api.js';
 import { renderCalendar, h } from './calendar.js';
 import { prepareFile, base64ToBlobUrl, formatSize, MAX_FILES } from './attachments.js';
 import {
-  todayISO, addDays, buildRange, formatDisplay, isValidISO, watchToday, RANGE_DAYS
+  todayISO, addDays, buildRange, formatDisplay, isValidISO, watchToday, weekdayName, RANGE_DAYS
 } from './date-utils.js';
 
 const $ = (id) => document.getElementById(id);
@@ -18,9 +18,11 @@ const state = {
   listBookings: [],
   known: new Map(), // id -> latest booking seen (for conflict recovery)
   editing: null, // { id, expectedMs }
+  companies: [], // admin: company names to book for
+  viewing: null,
   dayISO: null
 };
-let unRange = null; let unList = null; let unSession = null; let unUsers = null;
+let unRange = null; let unList = null; let unSession = null; let unUsers = null; let unCompanies = null;
 
 // ---------- small UI helpers ----------
 function toast(msg, kind = 'ok') {
@@ -150,12 +152,16 @@ function startList() {
 
 function startApp() {
   showApp();
+  unCompanies?.();
+  unCompanies = isAdmin() ? api.watchUsers((list) => {
+    state.companies = list.filter((u) => u.status !== 'suspended').map((u) => u.displayName).sort((a, b) => a.localeCompare(b));
+  }, () => {}) : null;
   startRange();
   startList();
 }
 function stopApp() {
-  unRange?.(); unList?.(); unUsers?.();
-  unRange = unList = unUsers = null;
+  unRange?.(); unList?.(); unUsers?.(); unCompanies?.();
+  unRange = unList = unUsers = unCompanies = null;
   state.calBookings = []; state.listBookings = []; state.known.clear();
 }
 
@@ -174,7 +180,7 @@ function drawHeader() {
 
 function drawCalendar() {
   renderCalendar($('cal'), { start: rangeStart(), today: state.today, bookings: state.calBookings }, {
-    onDay: openDay, onBooking: (b) => openBookingDialog(b)
+    onDay: openDay, onBooking: (b) => openView(b)
   });
 }
 
@@ -204,7 +210,7 @@ function drawTable() {
   $('rows').replaceChildren(...list.map((b, i) => h('tr', {},
     h('td', { class: 'c-n' }, String(i + 1)),
     h('td', { class: 'c-d' }, formatDisplay(b.bookingDate)),
-    h('td', {}, h('button', { class: 'cell-link', type: 'button', title: `Added by ${b.createdByName}`, onclick: () => openBookingDialog(b) }, b.eventName),
+    h('td', {}, h('button', { class: 'cell-link', type: 'button', title: `Added by ${b.createdByName}`, onclick: () => openView(b) }, b.eventName),
       h('span', { class: 'sub' }, bookingInfo(b))),
     h('td', { class: 'c-a' }, actionButtons(b)))));
   $('empty').hidden = list.length > 0;
@@ -216,8 +222,41 @@ function drawDay() {
   const list = state.calBookings.filter((b) => b.bookingDate === state.dayISO);
   $('day-title').textContent = `${formatDisplay(state.dayISO)} — ${list.length} booking${list.length === 1 ? '' : 's'}`;
   $('day-list').replaceChildren(...(list.length ? list.map((b) => h('li', {},
-    h('div', {}, h('strong', {}, b.eventName), h('small', {}, ` · by ${b.createdByName}`), h('span', { class: 'sub' }, bookingInfo(b))),
+    h('div', {}, h('button', { class: 'cell-link', type: 'button', onclick: () => openView(b) }, h('strong', {}, b.eventName)), h('span', { class: 'sub' }, bookingInfo(b))),
     actionButtons(b))) : [h('li', { class: 'muted' }, 'No bookings on this date.')]));
+}
+
+// ---------- company dropdown ----------
+function fillCompany(current) {
+  const sel = $('b-company');
+  const own = state.session.profile.displayName;
+  const names = isAdmin() ? [...state.companies] : [];
+  const pick = current || own;
+  if (!names.includes(pick)) names.unshift(pick);
+  if (!isAdmin()) names.splice(0, names.length, pick);
+  sel.replaceChildren(...names.map((n) => h('option', { value: n, selected: n === pick }, n)));
+  sel.value = pick;
+}
+
+// ---------- booking details pop-up ----------
+function openView(b) {
+  state.viewing = b;
+  $('v-company').textContent = b.eventName;
+  $('v-date').textContent = `${weekdayName(b.bookingDate)}, ${formatDisplay(b.bookingDate)}`;
+  $('v-truck').textContent = b.truckType || '—';
+  $('v-count').textContent = b.truckCount ? `${b.truckCount} ${b.truckCount === 1 ? 'lorry' : 'lorries'}` : '—';
+  $('v-notes').textContent = b.notes || '—';
+  const files = b.attachments || [];
+  $('v-att').replaceChildren(...(files.length ? files.map((a) => {
+    const isImg = a.type.startsWith('image/');
+    const thumb = isImg ? h('img', { alt: '', width: 40, height: 40 }) : h('span', { class: 'ph' }, (a.name.split('.').pop() || 'file').slice(0, 4));
+    if (isImg) loadThumb(b.id, a, thumb);
+    return h('li', {}, thumb, h('button', { type: 'button', class: 'link nm', onclick: () => openAttachment(b.id, a) }, `${a.name} (${formatSize(a.size)})`));
+  }) : [h('li', { class: 'muted' }, 'None')]));
+  $('v-meta').textContent = `Booked by ${b.createdByName}. Last changed by ${b.updatedByName}.`;
+  $('v-edit').hidden = $('v-delete').hidden = !canEdit(b);
+  if ($('dlg-day').open) $('dlg-day').close();
+  $('dlg-view').showModal();
 }
 
 // ---------- booking dialog ----------
@@ -230,14 +269,15 @@ function openBookingDialog(b, presetDate) {
   state.editing = editing ? { id: b.id, expectedMs: api.millis(b.updatedAt) } : null;
   $('dlg-booking-title').textContent = editing ? (canEdit(b) ? 'Edit Booking' : 'Booking details') : 'Add Booking';
   $('b-date').value = editing ? b.bookingDate : (presetDate || state.today);
-  $('b-name').value = editing ? b.eventName : '';
+  fillCompany(editing ? b.eventName : null);
   $('b-notes').value = editing ? (b.notes || '') : '';
   $('b-truck').value = editing ? (b.truckType || '') : '';
   $('b-count').value = editing && b.truckCount ? String(b.truckCount) : '';
   state.files = { bookingId: editing ? b.id : null, existing: editing ? [...(b.attachments || [])] : [], remove: [], add: [] };
   $('b-files').value = '';
   const ro = editing && !canEdit(b);
-  ['b-date', 'b-name', 'b-notes', 'b-truck', 'b-count', 'b-files'].forEach((id) => { $(id).disabled = ro; });
+  ['b-date', 'b-company', 'b-notes', 'b-truck', 'b-count', 'b-files'].forEach((id) => { $(id).disabled = ro; });
+  if (!isAdmin()) $('b-company').disabled = true; // company is filled in automatically
   state.files.readOnly = ro;
   drawAttachments();
   $('b-save').hidden = ro;
@@ -309,11 +349,11 @@ async function saveBooking(e) {
   e.preventDefault();
   const err = $('b-error');
   const f = {
-    bookingDate: $('b-date').value, eventName: $('b-name').value.trim(), notes: $('b-notes').value.trim(),
+    bookingDate: $('b-date').value, eventName: $('b-company').value, notes: $('b-notes').value.trim(),
     truckType: $('b-truck').value, truckCount: Number($('b-count').value)
   };
   if (!isValidISO(f.bookingDate)) { err.textContent = 'Choose a valid date.'; err.hidden = false; return; }
-  if (!f.eventName) { err.textContent = 'Event name is required.'; err.hidden = false; return; }
+  if (!f.eventName) { err.textContent = 'Choose the company.'; err.hidden = false; return; }
   if (!f.truckType) { err.textContent = 'Choose the type of truck.'; err.hidden = false; return; }
   if (!(f.truckCount >= 1 && f.truckCount <= 6)) { err.textContent = 'Choose the number of trucks (1-6).'; err.hidden = false; return; }
   const btn = $('b-save'); btn.disabled = true; btn.textContent = 'Saving…'; err.hidden = true;
@@ -360,9 +400,43 @@ function openUsers() {
         s.onchange = async () => { try { await api.updateUser(u.uid, { [key]: s.value }); toast('User updated.'); } catch (x) { toast(friendly(x), 'err'); s.value = u[key]; } };
         return s;
       };
-      return h('tr', {}, h('td', {}, u.displayName), h('td', {}, u.username || u.displayName.trim().toLowerCase().replace(/\s+/g, '.')), h('td', {}, sel('role', ['user', 'admin'])), h('td', {}, sel('status', ['pending', 'active', 'suspended'])));
+      return h('tr', {}, h('td', {}, u.displayName), h('td', {}, u.username || u.displayName.trim().toLowerCase().replace(/\s+/g, '.')), h('td', {}, sel('role', ['user', 'admin'])), h('td', {}, sel('status', ['pending', 'active', 'suspended'])),
+        h('td', {}, self ? h('span', { class: 'muted' }, 'You') : h('span', { class: 'acts' },
+          h('button', { class: 'icon', type: 'button', onclick: () => openEditUser(u) }, 'Edit'),
+          h('button', { class: 'icon danger-text', type: 'button', onclick: () => confirmDeleteUser(u) }, 'Delete'))));
     }));
   }, (e) => toast(friendly(e), 'err'));
+}
+
+const usernameOf = (u) => u.username || u.displayName.trim().toLowerCase().replace(/\s+/g, '.');
+
+function openEditUser(u) {
+  $('eu-name').value = u.displayName;
+  $('eu-username').textContent = `Username stays "${usernameOf(u)}" (renaming the company does not change the login).`;
+  $('eu-error').hidden = true;
+  $('form-edituser').onsubmit = async (e) => {
+    e.preventDefault();
+    const name = $('eu-name').value.trim();
+    if (!name) return;
+    try {
+      // Keep the existing username when the display name changes.
+      await api.updateUser(u.uid, { displayName: name, ...(u.username ? {} : { username: usernameOf(u) }) });
+      $('dlg-edituser').close(); toast('Company updated.');
+    } catch (x) { $('eu-error').textContent = friendly(x); $('eu-error').hidden = false; }
+  };
+  $('dlg-edituser').showModal();
+}
+
+function confirmDeleteUser(u) {
+  $('cf-title').textContent = 'Delete company?';
+  $('cf-text').textContent = `${u.displayName} will no longer be able to log in or see bookings. Their existing bookings stay on the calendar. (To remove the login completely, delete it in the Firebase Console.)`;
+  const dlg = $('dlg-confirm');
+  $('cf-yes').onclick = async () => {
+    $('cf-yes').disabled = true;
+    try { await api.deleteUser(u.uid, usernameOf(u)); dlg.close(); toast('Company deleted.'); } catch (x) { toast(friendly(x), 'err'); } finally { $('cf-yes').disabled = false; }
+  };
+  $('cf-no').onclick = () => dlg.close();
+  dlg.showModal();
 }
 
 async function openSettings() {
@@ -380,6 +454,10 @@ function wire() {
   $('day-add').onclick = () => openBookingDialog(null, state.dayISO);
   $('day-close').onclick = () => $('dlg-day').close();
   $('b-cancel').onclick = () => $('dlg-booking').close();
+  $('v-close').onclick = () => $('dlg-view').close();
+  $('v-edit').onclick = () => { const b = state.viewing; $('dlg-view').close(); openBookingDialog(b); };
+  $('v-delete').onclick = () => { const b = state.viewing; $('dlg-view').close(); confirmDelete(b); };
+  $('eu-cancel').onclick = () => $('dlg-edituser').close();
   $('b-files').onchange = (e) => addPickedFiles([...e.target.files]);
   $('form-booking').onsubmit = saveBooking;
   $('btn-logout').onclick = () => api.logout();

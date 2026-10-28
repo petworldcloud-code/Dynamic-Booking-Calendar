@@ -49,11 +49,11 @@
       <section class="panel table-panel" aria-labelledby="t-title">
         <h2 id="t-title" class="panel-title">Booking Input Table</h2>
         <div class="tools">
-          <input id="q" type="search" placeholder="Search event…" aria-label="Search by event name">
+          <input id="q" type="search" placeholder="Search company…" aria-label="Search by company name">
           <select id="sort" aria-label="Sort">
             <option value="asc">Date ↑</option>
             <option value="desc">Date ↓</option>
-            <option value="name">Event A–Z</option>
+            <option value="name">Company A–Z</option>
           </select>
         </div>
         <div class="tabs" role="tablist">
@@ -63,7 +63,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th class="c-n">#</th><th class="c-d">Date</th><th>Event</th><th class="c-a">Actions</th></tr></thead>
+            <thead><tr><th class="c-n">#</th><th class="c-d">Date</th><th>Company</th><th class="c-a">Actions</th></tr></thead>
             <tbody id="rows"></tbody>
           </table>
           <p id="empty" class="empty" hidden>No bookings found.</p>
@@ -91,7 +91,7 @@
     <form id="form-booking" method="dialog" novalidate>
       <h3 id="dlg-booking-title">Add Booking</h3>
       <label>Date <input id="b-date" type="date" required></label>
-      <label>Event name <input id="b-name" type="text" maxlength="120" required></label>
+      <label>Company <select id="b-company" required></select></label>
       <div class="row2">
         <label>Type of truck
           <select id="b-truck" required>
@@ -141,6 +141,37 @@
     </div>
   </dialog>
 
+  <!-- Booking details (view) -->
+  <dialog id="dlg-view">
+    <div class="dlg-head"><h3 id="v-company"></h3><button class="ghost" id="v-close" type="button">Close</button></div>
+    <dl class="details">
+      <dt>Date</dt><dd id="v-date"></dd>
+      <dt>Type of truck</dt><dd id="v-truck"></dd>
+      <dt>Number of trucks</dt><dd id="v-count"></dd>
+      <dt>Notes</dt><dd id="v-notes"></dd>
+      <dt>Attachments</dt><dd><ul id="v-att" class="attlist"></ul></dd>
+    </dl>
+    <p id="v-meta" class="meta"></p>
+    <div class="dlg-actions">
+      <button class="danger" id="v-delete" type="button" hidden>Delete</button>
+      <button class="primary" id="v-edit" type="button" hidden>Edit</button>
+    </div>
+  </dialog>
+
+  <!-- Admin: edit company -->
+  <dialog id="dlg-edituser">
+    <form id="form-edituser" method="dialog">
+      <h3>Edit company</h3>
+      <label>Company name <input id="eu-name" type="text" maxlength="80" required></label>
+      <p id="eu-username" class="meta"></p>
+      <p id="eu-error" class="error" role="alert" hidden></p>
+      <div class="dlg-actions">
+        <button type="button" class="ghost" id="eu-cancel">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Change own password -->
   <dialog id="dlg-password">
     <form id="form-password" method="dialog" autocomplete="off">
@@ -161,7 +192,7 @@
     <div class="dlg-head"><h3>Users</h3><button class="ghost" id="users-close" type="button">Close</button></div>
     <form id="form-newuser" class="newuser" autocomplete="off">
       <h4>Add user</h4>
-      <input id="nu-name" type="text" placeholder="Name (also the username)" maxlength="80" required aria-label="Name">
+      <input id="nu-name" type="text" placeholder="Company name (also the username)" maxlength="80" required aria-label="Company name">
       <input id="nu-email" type="email" placeholder="Email (optional, enables password reset)" aria-label="Email (optional)">
       <input id="nu-pw" type="text" placeholder="Initial password (min 6)" minlength="6" required aria-label="Initial password" autocomplete="off">
       <select id="nu-role" aria-label="Role"><option value="user">Standard user</option><option value="admin">Administrator</option></select>
@@ -169,7 +200,7 @@
       <p id="nu-error" class="error" role="alert" hidden></p>
     </form>
     <p class="meta">The username is the name in lowercase, spaces become dots (e.g. "Ali Tan" logs in as ali.tan). Give the new user that username and the initial password; they change it with the Password button in the header. Set Status to "suspended" to block someone. Deleting a login is done in the Firebase Console.</p>
-    <div class="table-wrap"><table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th></tr></thead><tbody id="users-rows"></tbody></table></div>
+    <div class="table-wrap"><table><thead><tr><th>Company</th><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody id="users-rows"></tbody></table></div>
   </dialog>
 
   <!-- Admin: retention -->

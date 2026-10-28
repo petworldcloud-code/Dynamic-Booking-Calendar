@@ -129,6 +129,10 @@ dialog label input, dialog label textarea { margin-top: 3px; }
 .attlist .ph { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 5px; background: #fff; color: var(--muted); font-size: .7rem; }
 .attlist .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attlist .new { color: #2f6f4f; font-size: .75rem; }
+.details { display: grid; grid-template-columns: 130px 1fr; gap: 8px 12px; margin: 10px 0; }
+.details dt { color: var(--muted); font-size: .85rem; }
+.details dd { margin: 0; font-weight: 600; word-break: break-word; }
+.details dd .attlist { font-weight: 400; }
 .sub { display: block; color: var(--muted); font-size: .75rem; }
 .check { display: flex !important; gap: 8px; align-items: center; }
 .check input { width: auto; margin: 0; }

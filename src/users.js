@@ -29,6 +29,14 @@ export function watchUsers(cb, onError) {
   return onSnapshot(q, (s) => cb(s.docs.map((d) => ({ uid: d.id, ...d.data() }))), onError);
 }
 
+/** Admin: remove a company's profile and its username mapping (login stops working for the app). */
+export function deleteUser(uid, username) {
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'users', uid));
+  if (username) batch.delete(doc(db, 'usernames', username));
+  return batch.commit();
+}
+
 export function updateUser(uid, fields) {
   return updateDoc(doc(db, 'users', uid), { ...fields, updatedAt: serverTimestamp() });
 }

@@ -35,11 +35,15 @@ service cloud.firestore {
           && request.resource.data.displayName.size() > 0
           && request.resource.data.displayName.size() <= 80)
         || (isAdmin()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'status', 'displayName', 'updatedAt'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'status', 'displayName', 'username', 'updatedAt'])
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() > 0
+          && request.resource.data.displayName.size() <= 80
           && request.resource.data.role in ['admin', 'user']
           && request.resource.data.status in ['pending', 'active', 'suspended']);
 
-      allow delete: if false;
+      // Admin removes a company's access (not themselves). The Firebase login itself is removed in the Console.
+      allow delete: if isAdmin() && request.auth.uid != uid;
     }
 
     // ---------- bookings ----------
@@ -63,6 +67,8 @@ service cloud.firestore {
       allow create: if isActive()
         && validBookingShape(request.resource.data)
         && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdByName == profile(request.auth.uid).displayName
+        && (isAdmin() || request.resource.data.eventName == request.resource.data.createdByName)
         && request.resource.data.updatedBy == request.auth.uid
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
@@ -72,6 +78,7 @@ service cloud.firestore {
         && (isOwner(resource.data) || isAdmin())
         && validBookingShape(request.resource.data)
         && request.resource.data.createdBy == resource.data.createdBy
+        && (isAdmin() || request.resource.data.eventName == resource.data.createdByName)
         && request.resource.data.createdByName == resource.data.createdByName
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedBy == request.auth.uid
