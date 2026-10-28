@@ -122,3 +122,20 @@ describe('settings', () => {
     await assertFails(setDoc(doc(ctx('alice'), 'settings', 'retention'), { ...data, updatedBy: 'alice' }));
   });
 });
+
+describe('usernames', () => {
+  const mapping = { email: 'bob@dim-calendar.local', uid: 'bob' };
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), 'usernames', 'bob'), mapping));
+  });
+  it('anyone can get a single mapping but not list', async () => {
+    await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'usernames', 'bob')));
+    await assertFails(getDocs(collection(env.unauthenticatedContext().firestore(), 'usernames')));
+  });
+  it('only admin can write, with a valid name', async () => {
+    await assertSucceeds(setDoc(doc(ctx('admin'), 'usernames', 'carol'), { email: 'c@x.com', uid: 'c' }));
+    await assertFails(setDoc(doc(ctx('admin'), 'usernames', 'A'), { email: 'c@x.com', uid: 'c' }));
+    await assertFails(setDoc(doc(ctx('alice'), 'usernames', 'dave'), { email: 'd@x.com', uid: 'd' }));
+    await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), 'usernames', 'eve'), { email: 'e@x.com', uid: 'e' }));
+  });
+});

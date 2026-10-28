@@ -30,7 +30,7 @@ function sub(fn) { const run = () => fn(); subs.add(run); run(); return () => su
 export const api = {
   watchSession(cb) { setTimeout(() => cb({ state: 'active', user: me, profile }), 50); return () => {}; },
   login: async () => {}, logout: async () => {}, resetPassword: async () => {},
-  adminCreateUser: async () => 'demo-new',
+  adminCreateUser: async () => 'demo-new', changePassword: async () => {},
   watchRange(s, e, cb) { return sub(() => cb(rows.filter((r) => r.bookingDate >= s && r.bookingDate <= e).sort(byDate))); },
   watchList({ from, before, max = 50 }, cb) {
     return sub(() => {

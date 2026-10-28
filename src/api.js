@@ -13,6 +13,7 @@ export const CONFIGURED = DEMO || isConfigured;
 const real = {
   watchSession: auth.watchSession, login: auth.login, logout: auth.logout,
   resetPassword: auth.resetPassword, adminCreateUser: auth.adminCreateUser,
+  changePassword: auth.changePassword,
   watchRange: bookings.watchRange, watchList: bookings.watchList,
   createBooking: bookings.createBooking, updateBooking: bookings.updateBooking,
   deleteBooking: bookings.deleteBooking, millis: bookings.millis,

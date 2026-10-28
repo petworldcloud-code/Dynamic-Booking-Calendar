@@ -36,6 +36,7 @@
           <div class="user-actions">
             <button id="btn-users" class="link" hidden type="button">Users</button>
             <button id="btn-settings" class="link" hidden type="button">Retention</button>
+            <button id="btn-password" class="link" type="button">Password</button>
             <button id="btn-logout" class="link" type="button">Log out</button>
           </div>
         </div>
@@ -120,20 +121,36 @@
     </div>
   </dialog>
 
+  <!-- Change own password -->
+  <dialog id="dlg-password">
+    <form id="form-password" method="dialog" autocomplete="off">
+      <h3>Change password</h3>
+      <label>Current password <input id="pw-old" type="password" required autocomplete="current-password"></label>
+      <label>New password (min 6) <input id="pw-new" type="password" minlength="6" required autocomplete="new-password"></label>
+      <label>Repeat new password <input id="pw-new2" type="password" minlength="6" required autocomplete="new-password"></label>
+      <p id="pw-error" class="error" role="alert" hidden></p>
+      <div class="dlg-actions">
+        <button type="button" class="ghost" id="pw-cancel">Cancel</button>
+        <button type="submit" class="primary">Change</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Admin: users -->
   <dialog id="dlg-users" class="wide">
     <div class="dlg-head"><h3>Users</h3><button class="ghost" id="users-close" type="button">Close</button></div>
     <form id="form-newuser" class="newuser" autocomplete="off">
       <h4>Add user</h4>
       <input id="nu-name" type="text" placeholder="Name" maxlength="80" required aria-label="Name">
-      <input id="nu-email" type="email" placeholder="Email" required aria-label="Email">
+      <input id="nu-username" type="text" placeholder="Username (a-z, 0-9 . _ -)" maxlength="30" required aria-label="Username" autocapitalize="none" spellcheck="false">
+      <input id="nu-email" type="email" placeholder="Email (optional, enables password reset)" aria-label="Email (optional)">
       <input id="nu-pw" type="text" placeholder="Initial password (min 6)" minlength="6" required aria-label="Initial password" autocomplete="off">
       <select id="nu-role" aria-label="Role"><option value="user">Standard user</option><option value="admin">Administrator</option></select>
       <button class="primary" type="submit" id="nu-save">Create</button>
       <p id="nu-error" class="error" role="alert" hidden></p>
     </form>
-    <p class="meta">Give the new user their email and initial password; they can change it with "Forgot password". Set Status to "suspended" to block someone. Deleting a login is done in the Firebase Console.</p>
-    <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead><tbody id="users-rows"></tbody></table></div>
+    <p class="meta">Give the new user their username and initial password; they change it with the Password button in the header. Set Status to "suspended" to block someone. Deleting a login is done in the Firebase Console.</p>
+    <div class="table-wrap"><table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th></tr></thead><tbody id="users-rows"></tbody></table></div>
   </dialog>
 
   <!-- Admin: retention -->

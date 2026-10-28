@@ -29,7 +29,9 @@ function toast(msg, kind = 'ok') {
 }
 const friendly = (e) => ({
   'auth/invalid-credential': 'Incorrect email or password.',
-  'auth/invalid-email': 'Enter a valid email address.',
+  'auth/invalid-email': 'Enter a valid username.',
+  'auth/wrong-password': 'Incorrect password.',
+  'auth/requires-recent-login': 'Please log out and log in again, then retry.',
   'auth/email-already-in-use': 'That email is already registered.',
   'auth/weak-password': 'Password must be at least 6 characters.',
   'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
@@ -68,7 +70,7 @@ function authScreen(mode = 'login') {
         e.preventDefault();
         try { await api.login(e.target.email.value.trim(), e.target.pw.value); } catch (x) { fail(x); }
       }
-    }, field('Email', { name: 'email', type: 'email', required: true, autocomplete: 'username' }),
+    }, field('Username', { name: 'email', type: 'text', required: true, autocomplete: 'username', autocapitalize: 'none', spellcheck: 'false' }),
     field('Password', { name: 'pw', type: 'password', required: true, autocomplete: 'current-password' }),
     h('p', { class: 'meta' }, 'Accounts are created by an administrator.'),
     err, h('button', { class: 'primary', type: 'submit' }, 'Log in'),
@@ -79,7 +81,7 @@ function authScreen(mode = 'login') {
         e.preventDefault();
         try { await api.resetPassword(e.target.email.value.trim()); toast('If that email is registered, a reset link was sent.'); authScreen('login'); } catch (x) { fail(x); }
       }
-    }, field('Email', { name: 'email', type: 'email', required: true }), err,
+    }, field('Username (or email)', { name: 'email', type: 'text', required: true, autocapitalize: 'none' }), err,
     h('button', { class: 'primary', type: 'submit' }, 'Send reset link'),
     h('div', { class: 'links' }, switchTo('login')));
   }
@@ -282,7 +284,7 @@ function openUsers() {
         s.onchange = async () => { try { await api.updateUser(u.uid, { [key]: s.value }); toast('User updated.'); } catch (x) { toast(friendly(x), 'err'); s.value = u[key]; } };
         return s;
       };
-      return h('tr', {}, h('td', {}, u.displayName), h('td', {}, u.email), h('td', {}, sel('role', ['user', 'admin'])), h('td', {}, sel('status', ['pending', 'active', 'suspended'])));
+      return h('tr', {}, h('td', {}, u.displayName), h('td', {}, u.username || u.email), h('td', {}, sel('role', ['user', 'admin'])), h('td', {}, sel('status', ['pending', 'active', 'suspended'])));
     }));
   }, (e) => toast(friendly(e), 'err'));
 }
@@ -304,6 +306,17 @@ function wire() {
   $('b-cancel').onclick = () => $('dlg-booking').close();
   $('form-booking').onsubmit = saveBooking;
   $('btn-logout').onclick = () => api.logout();
+  $('btn-password').onclick = () => { $('form-password').reset(); $('pw-error').hidden = true; $('dlg-password').showModal(); };
+  $('pw-cancel').onclick = () => $('dlg-password').close();
+  $('form-password').onsubmit = async (e) => {
+    e.preventDefault();
+    const err = $('pw-error'); err.hidden = true;
+    if ($('pw-new').value !== $('pw-new2').value) { err.textContent = 'New passwords do not match.'; err.hidden = false; return; }
+    try {
+      await api.changePassword($('pw-old').value, $('pw-new').value);
+      $('dlg-password').close(); toast('Password changed.');
+    } catch (x) { err.textContent = friendly(x); err.hidden = false; }
+  };
   $('btn-users').onclick = openUsers;
   $('users-close').onclick = () => { $('dlg-users').close(); unUsers?.(); unUsers = null; };
   $('btn-settings').onclick = openSettings;
@@ -313,7 +326,7 @@ function wire() {
     err.hidden = true; btn.disabled = true; btn.textContent = 'Creating…';
     try {
       await api.adminCreateUser({
-        name: $('nu-name').value.trim(), email: $('nu-email').value.trim(),
+        name: $('nu-name').value.trim(), username: $('nu-username').value, email: $('nu-email').value,
         password: $('nu-pw').value, role: $('nu-role').value
       });
       e.target.reset();

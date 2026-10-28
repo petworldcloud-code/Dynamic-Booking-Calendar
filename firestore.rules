@@ -18,7 +18,7 @@ service cloud.firestore {
 
       // No self-registration: only an admin creates profiles (accounts are made in the app by an admin).
       allow create: if isAdmin()
-        && request.resource.data.keys().hasOnly(['displayName', 'email', 'role', 'status', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['displayName', 'username', 'email', 'role', 'status', 'createdAt', 'updatedAt'])
         && request.resource.data.role in ['admin', 'user']
         && request.resource.data.status in ['pending', 'active', 'suspended']
         && request.resource.data.displayName is string
@@ -89,6 +89,20 @@ service cloud.firestore {
         && request.resource.data.retentionDays <= 3650
         && request.resource.data.updatedBy == request.auth.uid
         && request.resource.data.updatedAt == request.time;
+    }
+
+    // ---------- usernames (login lookup) ----------
+    // Single-document reads are public so the login screen can map a username to its auth email;
+    // listing is never allowed. Only admins write.
+    match /usernames/{name} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if isAdmin()
+        && name.matches('^[a-z0-9._-]{3,30}$')
+        && request.resource.data.keys().hasOnly(['email', 'uid'])
+        && request.resource.data.email is string
+        && request.resource.data.uid is string;
+      allow update, delete: if isAdmin();
     }
 
     match /{document=**} { allow read, write: if false; }
