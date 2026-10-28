@@ -284,7 +284,7 @@ function openUsers() {
         s.onchange = async () => { try { await api.updateUser(u.uid, { [key]: s.value }); toast('User updated.'); } catch (x) { toast(friendly(x), 'err'); s.value = u[key]; } };
         return s;
       };
-      return h('tr', {}, h('td', {}, u.displayName), h('td', {}, u.username || u.email), h('td', {}, sel('role', ['user', 'admin'])), h('td', {}, sel('status', ['pending', 'active', 'suspended'])));
+      return h('tr', {}, h('td', {}, u.displayName), h('td', {}, u.username || u.displayName.trim().toLowerCase().replace(/\s+/g, '.')), h('td', {}, sel('role', ['user', 'admin'])), h('td', {}, sel('status', ['pending', 'active', 'suspended'])));
     }));
   }, (e) => toast(friendly(e), 'err'));
 }
@@ -326,7 +326,7 @@ function wire() {
     err.hidden = true; btn.disabled = true; btn.textContent = 'Creating…';
     try {
       await api.adminCreateUser({
-        name: $('nu-name').value.trim(), username: $('nu-username').value, email: $('nu-email').value,
+        name: $('nu-name').value.trim(), email: $('nu-email').value,
         password: $('nu-pw').value, role: $('nu-role').value
       });
       e.target.reset();

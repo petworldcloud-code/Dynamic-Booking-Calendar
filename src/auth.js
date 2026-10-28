@@ -9,6 +9,9 @@ import { watchProfile, createUserProfile, lookupUsernameEmail } from './users.js
 export const SYNTHETIC_DOMAIN = 'dim-calendar.local';
 export const USERNAME_RE = /^[a-z0-9._-]{3,30}$/;
 
+/** The username is the person's name: lowercase, spaces become dots. */
+export const usernameFromName = (name) => name.trim().toLowerCase().replace(/\s+/g, '.');
+
 /**
  * cb({state, user, profile, error});
  * state: signedOut | noaccess | pending | active | suspended | error
@@ -62,10 +65,10 @@ export async function changePassword(oldPw, newPw) {
  * Admin only: create a login with a second Auth instance (so the admin stays signed in),
  * then write the profile + username mapping as the admin.
  */
-export async function adminCreateUser({ name, username, email, password, role }) {
-  const uname = username.trim().toLowerCase();
+export async function adminCreateUser({ name, email, password, role }) {
+  const uname = usernameFromName(name);
   if (!USERNAME_RE.test(uname)) {
-    throw new Error('Username must be 3-30 characters: letters, numbers, dot, dash or underscore.');
+    throw new Error('The name is used as the username, so it must be 3-30 characters using letters, numbers, spaces, dot, dash or underscore.');
   }
   const realEmail = (email || '').trim().toLowerCase();
   const authEmail = realEmail || `${uname}@${SYNTHETIC_DOMAIN}`;

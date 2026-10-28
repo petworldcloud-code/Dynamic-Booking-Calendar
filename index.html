@@ -141,15 +141,14 @@
     <div class="dlg-head"><h3>Users</h3><button class="ghost" id="users-close" type="button">Close</button></div>
     <form id="form-newuser" class="newuser" autocomplete="off">
       <h4>Add user</h4>
-      <input id="nu-name" type="text" placeholder="Name" maxlength="80" required aria-label="Name">
-      <input id="nu-username" type="text" placeholder="Username (a-z, 0-9 . _ -)" maxlength="30" required aria-label="Username" autocapitalize="none" spellcheck="false">
+      <input id="nu-name" type="text" placeholder="Name (also the username)" maxlength="80" required aria-label="Name">
       <input id="nu-email" type="email" placeholder="Email (optional, enables password reset)" aria-label="Email (optional)">
       <input id="nu-pw" type="text" placeholder="Initial password (min 6)" minlength="6" required aria-label="Initial password" autocomplete="off">
       <select id="nu-role" aria-label="Role"><option value="user">Standard user</option><option value="admin">Administrator</option></select>
       <button class="primary" type="submit" id="nu-save">Create</button>
       <p id="nu-error" class="error" role="alert" hidden></p>
     </form>
-    <p class="meta">Give the new user their username and initial password; they change it with the Password button in the header. Set Status to "suspended" to block someone. Deleting a login is done in the Firebase Console.</p>
+    <p class="meta">The username is the name in lowercase, spaces become dots (e.g. "Ali Tan" logs in as ali.tan). Give the new user that username and the initial password; they change it with the Password button in the header. Set Status to "suspended" to block someone. Deleting a login is done in the Firebase Console.</p>
     <div class="table-wrap"><table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th></tr></thead><tbody id="users-rows"></tbody></table></div>
   </dialog>
 
