@@ -27,7 +27,7 @@ export function toneFor(name) {
  * Render the calendar grid into `root`.
  * handlers: { onDay(iso, list), onBooking(booking) }
  */
-export function renderCalendar(root, { start, today, bookings }, handlers) {
+export function renderCalendar(root, { start, today, bookings, blocked = new Map() }, handlers) {
   const range = buildRange(start);
   const byDay = new Map();
   for (const b of bookings) {
@@ -53,12 +53,14 @@ export function renderCalendar(root, { start, today, bookings }, handlers) {
         const shown = list.slice(0, MAX_PER_DAY);
         const extra = list.length - shown.length;
         const isToday = iso === today;
-        return h('div', { class: `cal-cell${isToday ? ' is-today' : ''}`, role: 'gridcell' },
+        const closed = blocked.has(iso);
+        return h('div', { class: `cal-cell${isToday ? ' is-today' : ''}${closed ? ' is-blocked' : ''}`, role: 'gridcell' },
           h('button', {
             class: 'cal-date', type: 'button',
             'aria-label': `${formatDisplay(iso)}${isToday ? ', today' : ''}, ${list.length} bookings`,
             onclick: () => handlers.onDay(iso, list)
           }, h('span', {}, formatDisplay(iso)), isToday ? h('span', { class: 'today-dot', title: 'Today' }) : null),
+          closed ? h('div', { class: 'cal-closed' }, `Closed${blocked.get(iso) ? `: ${blocked.get(iso)}` : ''}`) : null,
           h('div', { class: 'cal-events' },
             shown.map((b) => h('button', {
               class: `evt tone-${toneFor(b.eventName)}`, type: 'button',

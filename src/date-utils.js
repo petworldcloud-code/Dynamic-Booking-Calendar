@@ -37,6 +37,19 @@ export function isValidISO(iso) {
   try { parseISO(iso); return true; } catch { return false; }
 }
 
+/** All dates from `from` to `to` inclusive ("YYYY-MM-DD"); throws if the range is reversed or longer than `max`. */
+export function dateSpan(from, to, max = 62) {
+  if (!isValidISO(from) || !isValidISO(to || from)) throw new Error('Choose a valid date.');
+  const end = to || from;
+  if (end < from) throw new Error('The end date must not be before the start date.');
+  const out = [];
+  for (let d = from; d <= end; d = addDays(d, 1)) {
+    out.push(d);
+    if (out.length > max) throw new Error(`Block at most ${max} days at once.`);
+  }
+  return out;
+}
+
 export function addDays(iso, n) {
   const dt = parseISO(iso);
   dt.setUTCDate(dt.getUTCDate() + n);

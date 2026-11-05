@@ -158,6 +158,33 @@ describe('booking vehicle fields', () => {
   });
 });
 
+describe('blocked dates', () => {
+  const block = (d = '2026-10-27') => env.withSecurityRulesDisabled(async (c) =>
+    setDoc(doc(c.firestore(), 'blockedDates', d), { reason: 'Holiday', createdBy: 'admin', createdAt: new Date() }));
+  it('only admin writes blocked dates; active users read them', async () => {
+    const data = (uid) => ({ reason: 'Holiday', createdBy: uid, createdAt: serverTimestamp() });
+    await assertSucceeds(setDoc(doc(ctx('admin'), 'blockedDates', '2026-12-25'), data('admin')));
+    await assertFails(setDoc(doc(ctx('alice'), 'blockedDates', '2026-12-26'), data('alice')));
+    await assertFails(setDoc(doc(ctx('admin'), 'blockedDates', 'christmas'), data('admin')));
+    await assertSucceeds(getDoc(doc(ctx('bob'), 'blockedDates', '2026-12-25')));
+    await assertFails(getDoc(doc(ctx('pat'), 'blockedDates', '2026-12-25')));
+    await assertFails(deleteDoc(doc(ctx('alice'), 'blockedDates', '2026-12-25')));
+    await assertSucceeds(deleteDoc(doc(ctx('admin'), 'blockedDates', '2026-12-25')));
+  });
+  it('a company cannot book a blocked date, an admin can', async () => {
+    await block();
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'k1'), booking('bob')));
+    await assertSucceeds(setDoc(doc(ctx('admin'), 'bookings', 'k2'), booking('admin')));
+    await assertSucceeds(setDoc(doc(ctx('bob'), 'bookings', 'k3'), booking('bob', { bookingDate: '2026-10-28' })));
+  });
+  it('a company cannot move a booking onto a blocked date but can edit one already on it', async () => {
+    await block('2026-11-01');
+    await assertFails(updateDoc(doc(ctx('alice'), 'bookings', 'b1'), { bookingDate: '2026-11-01', updatedBy: 'alice', updatedAt: serverTimestamp() }));
+    await block('2026-10-27');
+    await assertSucceeds(updateDoc(doc(ctx('alice'), 'bookings', 'b1'), { notes: 'edited', updatedBy: 'alice', updatedAt: serverTimestamp() }));
+  });
+});
+
 describe('booking time slot', () => {
   it('accepts a well-formed slot and none at all', async () => {
     await assertSucceeds(setDoc(doc(ctx('bob'), 'bookings', 't1'), booking('bob', { timeSlot: '08:00-10:00' })));

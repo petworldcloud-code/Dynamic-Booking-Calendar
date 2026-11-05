@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
-  todayISO, addDays, weekdayName, buildRange, formatDisplay, isValidISO, setClock, msUntilMidnight
+  todayISO, addDays, dateSpan, weekdayName, buildRange, formatDisplay, isValidISO, setClock, msUntilMidnight
 } from '../src/date-utils.js';
 
 afterEach(() => setClock(null));
@@ -67,5 +67,17 @@ describe('date utils', () => {
     expect(isValidISO('2026-02-30')).toBe(false);
     expect(isValidISO('2026-13-01')).toBe(false);
     expect(isValidISO('2026-10-27')).toBe(true);
+  });
+});
+
+describe('dateSpan', () => {
+  it('lists every date, inclusive, across a month end', () => {
+    expect(dateSpan('2026-12-30', '2027-01-02')).toEqual(['2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02']);
+    expect(dateSpan('2026-12-25')).toEqual(['2026-12-25']);
+  });
+  it('rejects reversed, invalid and over-long ranges', () => {
+    expect(() => dateSpan('2026-12-25', '2026-12-24')).toThrow(/before/);
+    expect(() => dateSpan('', '2026-12-24')).toThrow();
+    expect(() => dateSpan('2026-01-01', '2026-12-31')).toThrow(/at most/);
   });
 });

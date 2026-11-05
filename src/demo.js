@@ -10,6 +10,8 @@ const subs = new Set();
 const notify = () => subs.forEach((f) => f());
 let slots = ['08:00-09:00', '09:00-10:00', '10:00-11:00', '11:00-12:00'];
 const slotSubs = new Set();
+const blocked = new Map([[addDays(todayISO(), 5), 'Public holiday'], [addDays(todayISO(), 6), 'Public holiday']]);
+const blockedSubs = new Set();
 
 const names = ['Tefal', 'Sony', '3M', 'GOON', 'Nestle', 'Unilever', 'Coca Cola', 'Watsons', 'Dove', 'Pepsi', 'Samsung', 'Lenovo'];
 function mk(dayOffset, eventName, n = 0) {
@@ -70,5 +72,12 @@ export const api = {
     slotSubs.add(run); run();
     return () => slotSubs.delete(run);
   },
-  async saveSlots(uid, list) { slots = [...list]; slotSubs.forEach((f) => f()); }
+  async saveSlots(uid, list) { slots = [...list]; slotSubs.forEach((f) => f()); },
+  watchBlocked(cb) {
+    const run = () => cb(new Map(blocked));
+    blockedSubs.add(run); run();
+    return () => blockedSubs.delete(run);
+  },
+  async blockDates(uid, dates, reason) { dates.forEach((d) => blocked.set(d, reason)); blockedSubs.forEach((f) => f()); },
+  async unblockDate(d) { blocked.delete(d); blockedSubs.forEach((f) => f()); }
 };

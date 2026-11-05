@@ -107,6 +107,15 @@ tbody tr:hover { background: #fbf7fc; }
 .evt { border: 0; border-radius: 6px; padding: 3px 8px; text-align: left; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .evt:hover { filter: brightness(.96); text-decoration: underline; }
 .evt-truck { color: var(--muted); font-size: .72rem; }
+.cal-cell.is-blocked { background: repeating-linear-gradient(135deg, #f1ecf3, #f1ecf3 8px, #e8e1ec 8px, #e8e1ec 16px); }
+.cal-cell.is-blocked .cal-date { background: #ddd3e3; }
+.cal-closed { font-size: .75rem; font-weight: 700; color: var(--danger); background: #fff; border-radius: 6px; padding: 3px 6px; overflow-wrap: anywhere; }
+.blockform { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin: 8px 0; padding: 10px; background: var(--lavender); border-radius: 8px; align-items: end; }
+.blockform .wide, .blockform .error { grid-column: 1 / -1; }
+.blocklist { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow: auto; }
+.blocklist li { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: .88rem; }
+.blocklist li.muted { border: 0; background: none; padding-left: 0; }
+.day-closed { color: var(--danger); font-weight: 600; margin: 4px 0 8px; }
 .evt-time { font-weight: 700; font-size: .72rem; color: var(--purple); }
 .slotlist { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .slotlist li { display: flex; align-items: center; gap: 6px; background: var(--lavender); border-radius: 999px; padding: 4px 6px 4px 12px; font-size: .88rem; font-weight: 600; }

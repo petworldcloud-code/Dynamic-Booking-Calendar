@@ -4,7 +4,7 @@ import { prepareFile, base64ToBlobUrl, formatSize, MAX_FILES } from './attachmen
 import { vehicleOf, vehicleText, palletText, vehicleFields, vehicleProblem } from './booking-utils.js';
 import { slotLabel, slotStart, makeSlot, cleanSlots, generateSlots, MAX_SLOTS } from './slot-utils.js';
 import {
-  todayISO, addDays, buildRange, formatDisplay, isValidISO, watchToday, weekdayName, RANGE_DAYS
+  todayISO, addDays, dateSpan, buildRange, formatDisplay, isValidISO, watchToday, weekdayName, RANGE_DAYS
 } from './date-utils.js';
 
 const $ = (id) => document.getElementById(id);
@@ -21,12 +21,13 @@ const state = {
   known: new Map(), // id -> latest booking seen (for conflict recovery)
   editing: null, // { id, expectedMs }
   companies: [], // admin: company names to book for
+  blocked: new Map(), // closed dates: "YYYY-MM-DD" -> reason
   slots: [], // time slots admins allow, e.g. "08:00-10:00" (empty = no time slots)
   draftSlots: [], // admin: list being edited in the Time slots dialog
   viewing: null,
   dayISO: null
 };
-let unRange = null; let unList = null; let unSession = null; let unUsers = null; let unCompanies = null; let unSlots = null;
+let unRange = null; let unList = null; let unSession = null; let unUsers = null; let unCompanies = null; let unSlots = null; let unBlocked = null;
 
 // ---------- small UI helpers ----------
 function toast(msg, kind = 'ok') {
@@ -118,7 +119,7 @@ function onSession(s) {
     if (!wasActive) startApp();
     $('user-name').textContent = s.profile.displayName;
     $('user-role').textContent = s.profile.role === 'admin' ? 'Administrator' : 'Standard user';
-    $('btn-users').hidden = $('btn-settings').hidden = $('btn-slots').hidden = s.profile.role !== 'admin';
+    $('btn-users').hidden = $('btn-settings').hidden = $('btn-slots').hidden = $('btn-blocked').hidden = s.profile.role !== 'admin';
     return;
   }
   stopApp();
@@ -162,13 +163,19 @@ function startApp() {
   }, () => {}) : null;
   unSlots?.();
   unSlots = api.watchSlots((list) => { state.slots = list; }, () => {});
+  unBlocked?.();
+  unBlocked = api.watchBlocked((map) => {
+    state.blocked = map; drawCalendar();
+    if (state.dayISO && $('dlg-day').open) drawDay();
+    if ($('dlg-blocked').open) drawBlockedList();
+  }, () => {});
   startRange();
   startList();
 }
 function stopApp() {
-  unRange?.(); unList?.(); unUsers?.(); unCompanies?.(); unSlots?.();
-  unRange = unList = unUsers = unCompanies = unSlots = null;
-  state.calBookings = []; state.listBookings = []; state.known.clear(); state.slots = [];
+  unRange?.(); unList?.(); unUsers?.(); unCompanies?.(); unSlots?.(); unBlocked?.();
+  unRange = unList = unUsers = unCompanies = unSlots = unBlocked = null;
+  state.calBookings = []; state.listBookings = []; state.known.clear(); state.slots = []; state.blocked = new Map();
 }
 
 // ---------- rendering ----------
@@ -185,7 +192,7 @@ function drawHeader() {
 }
 
 function drawCalendar() {
-  renderCalendar($('cal'), { start: rangeStart(), today: state.today, bookings: state.calBookings }, {
+  renderCalendar($('cal'), { start: rangeStart(), today: state.today, bookings: state.calBookings, blocked: state.blocked }, {
     onDay: openDay, onBooking: (b) => openView(b)
   });
 }
@@ -230,6 +237,10 @@ function openDay(iso) { state.dayISO = iso; drawDay(); $('dlg-day').showModal();
 function drawDay() {
   const list = state.calBookings.filter((b) => b.bookingDate === state.dayISO);
   $('day-title').textContent = `${formatDisplay(state.dayISO)} — ${list.length} booking${list.length === 1 ? '' : 's'}`;
+  const closed = state.blocked.has(state.dayISO);
+  $('day-closed').hidden = !closed;
+  $('day-closed').textContent = closed ? `Closed for bookings${state.blocked.get(state.dayISO) ? `: ${state.blocked.get(state.dayISO)}` : ''}.` : '';
+  $('day-add').hidden = closed && !isAdmin();
   $('day-list').replaceChildren(...(list.length ? list.map((b) => h('li', {},
     h('div', {}, h('button', { class: 'cell-link', type: 'button', onclick: () => openView(b) }, h('strong', {}, b.eventName)), h('span', { class: 'sub' }, bookingInfo(b))),
     actionButtons(b))) : [h('li', { class: 'muted' }, 'No bookings on this date.')]));
@@ -396,6 +407,10 @@ async function saveBooking(e) {
   };
   const fail = (m) => { err.textContent = m; err.hidden = false; };
   if (!isValidISO(f.bookingDate)) return fail('Choose a valid date.');
+  const dateChanged = !state.editing || state.known.get(state.editing.id)?.bookingDate !== f.bookingDate;
+  if (state.blocked.has(f.bookingDate) && !isAdmin() && dateChanged) {
+    return fail(`${formatDisplay(f.bookingDate)} is closed for bookings${state.blocked.get(f.bookingDate) ? ` (${state.blocked.get(f.bookingDate)})` : ''}. Please choose another date.`);
+  }
   if (state.slots.length && !f.timeSlot) return fail('Choose a time slot.');
   if (!f.eventName) return fail('Choose the company.');
   const problem = vehicleProblem(raw);
@@ -483,6 +498,33 @@ function confirmDeleteUser(u) {
   dlg.showModal();
 }
 
+// ---------- admin: blocked dates ----------
+function blockProblem(msg) { const e = $('bl-error'); e.textContent = msg; e.hidden = !msg; }
+
+function drawBlockedList() {
+  const upcoming = [...state.blocked.entries()].filter(([d]) => d >= state.today).sort(([a], [b]) => a.localeCompare(b));
+  $('bl-list').replaceChildren(...(upcoming.length ? upcoming.map(([d, reason]) => h('li', {},
+    h('span', {}, h('strong', {}, `${weekdayName(d)}, ${formatDisplay(d)}`), reason ? ` — ${reason}` : ''),
+    h('button', {
+      type: 'button', class: 'icon danger-text', 'aria-label': `Unblock ${formatDisplay(d)}`,
+      onclick: async () => { try { await api.unblockDate(d); toast('Date reopened.'); } catch (x) { toast(friendly(x), 'err'); } }
+    }, 'Unblock'))) : [h('li', { class: 'muted' }, 'No blocked dates coming up.')]));
+}
+
+function openBlocked() { blockProblem(''); drawBlockedList(); $('dlg-blocked').showModal(); }
+
+async function addBlocked(e) {
+  e.preventDefault();
+  const btn = $('bl-add'); blockProblem('');
+  try {
+    const dates = dateSpan($('bl-from').value, $('bl-to').value || $('bl-from').value);
+    btn.disabled = true; btn.textContent = 'Blocking…';
+    await api.blockDates(state.session.user.uid, dates, $('bl-reason').value.trim());
+    e.target.reset();
+    toast(`${dates.length} date${dates.length === 1 ? '' : 's'} blocked.`);
+  } catch (x) { blockProblem(friendly(x)); } finally { btn.disabled = false; btn.textContent = 'Block'; }
+}
+
 // ---------- admin: time slots ----------
 function slotProblem(msg) { const e = $('sl-error'); e.textContent = msg; e.hidden = !msg; }
 
@@ -553,6 +595,9 @@ function wire() {
   $('users-close').onclick = () => { $('dlg-users').close(); unUsers?.(); unUsers = null; };
   $('btn-settings').onclick = openSettings;
   $('btn-slots').onclick = openSlots;
+  $('btn-blocked').onclick = openBlocked;
+  $('bl-close').onclick = () => $('dlg-blocked').close();
+  $('form-blocked').onsubmit = addBlocked;
   $('sl-cancel').onclick = () => $('dlg-slots').close();
   $('sl-add').onclick = () => changeSlotDraft(() => [...state.draftSlots, makeSlot($('sl-from').value, $('sl-to').value)]);
   $('sg-go').onclick = () => changeSlotDraft(() => generateSlots($('sg-from').value, $('sg-to').value, $('sg-step').value));

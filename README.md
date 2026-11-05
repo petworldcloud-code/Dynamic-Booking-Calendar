@@ -15,7 +15,7 @@ A shared, multi-company **lorry booking calendar**. Each company logs in, picks 
 | Who | Can do |
 |---|---|
 | **Company (standard user)** | Log in with a username + password. Add a booking: pick **one date**, a **time slot** (when the admin has set any), **type of vehicle** (Van or Truck; **type of truck** only appears, and is required, when Truck is chosen), **number of vehicles (1-6)**, whether the cargo is **palletized**, an optional **plate number**, optional notes and up to 5 attachments. The company name is **fixed to their own** (not selectable). View every company's bookings on the calendar and table. Edit/delete **only their own** bookings. Change their own password. |
-| **Administrator** | Everything above, plus: edit/delete **any** booking; book **on behalf of any company** (Company dropdown); open **Users** to add, rename, suspend and delete companies; open **Time slots** to set the arrival times companies can choose (e.g. morning only); open **Retention** to set the (off-by-default) auto-delete policy. |
+| **Administrator** | Everything above, plus: edit/delete **any** booking; book **on behalf of any company** (Company dropdown); open **Users** to add, rename, suspend and delete companies; open **Blocked dates** to close dates (holidays) to company bookings; open **Time slots** to set the arrival times companies can choose (e.g. morning only); open **Retention** to set the (off-by-default) auto-delete policy. |
 
 Screen layout: header (today, calendar range, legend, user menu); **left** = booking table (search, sort, Upcoming / History tabs, Add Booking); **right** = 31-day calendar (Mon-Sun columns, Prev / Today / Next).
 
@@ -125,6 +125,7 @@ vite.config.js              base path = /Dynamic-Booking-Calendar/ (GitHub Pages
 | `bookings` | auto ID | `bookingDate` (`YYYY-MM-DD`), `eventName` (= **company name**), `vehicleType` (`Van`/`Truck`; absent on bookings made before it existed, which count as Truck), `truckType` (only for trucks), `truckCount` (1-6), `palletized` (true/false; absent on old bookings), `plateNumber` (optional text, several allowed), `timeSlot` (optional, `"08:00-10:00"`), `notes`, `attachments` (list of `{id,name,type,size}`), `createdBy`, `createdByName`, `createdAt`, `updatedBy`, `updatedByName`, `updatedAt` |
 | `bookings/{id}/attachments` | random ID | `name`, `type`, `size`, `data` (base64 file), `createdBy`, `createdAt` |
 | `settings` | `retention` | `autoDeleteEnabled` (false by default), `retentionDays`, `updatedAt`, `updatedBy` |
+| `blockedDates` | the date `YYYY-MM-DD` | `reason` (text, max 80), `createdBy`, `createdAt`. A document existing = that date is closed to company bookings. Admin writes, active users read. |
 | `settings` | `slots` | `slots` (list of `"HH:MM-HH:MM"` 24-hour text, max 24), `updatedAt`, `updatedBy`. Empty/missing = no time slots, bookings only have a date. |
 
 - Dates are stored as plain `YYYY-MM-DD` text, never as timestamps, so timezones cannot shift a booking.
@@ -177,6 +178,9 @@ Users panel -> **Edit** (rename; username stays), the **Status** dropdown (`susp
 
 ### 7.3b Set the allowed booking times (admin)
 Header -> **Time slots**. Add slots one by one (From / To -> **Add slot**) or use **Quick fill** (e.g. 08:00 to 12:00 every 1 hour -> "Replace the list") -> **Save**. From then on every booking must choose one of the slots (shown as the time before the company name on the calendar and in the details pop-up). Remove all slots and Save to switch the feature off. Changing the list never changes existing bookings; an old booking whose slot was removed shows "(no longer offered)" when edited. **Note:** the rules only check that a slot is well-formed; the choice of allowed slots is enforced by the app screen, not by the database.
+
+### 7.3c Block a date, e.g. a public holiday (admin)
+Header -> **Blocked dates**. Choose **From** (and **To** for several days), type a **Reason**, press **Block** (max 62 days at once). Blocked days show hatched with "Closed: reason" on the calendar. Companies get an error if they try to book or move a booking onto that date, and the rules enforce this too (a company cannot bypass it). Administrators can still book on blocked dates. Bookings already on a date stay. To reopen a date press **Unblock** in the same dialog (only upcoming blocked dates are listed).
 
 ### 7.4 Forgotten password
 - Company has a real email: login screen -> "Forgot password?".
@@ -245,7 +249,7 @@ Notes for Windows: run npm from **PowerShell or CMD**. In Git Bash `npm run ...`
 
 | Area | Status |
 |---|---|
-| Date logic (Malaysia time, 31-day range, weekday alignment, midnight roll, leap years) and time-slot and vehicle-field helpers | **Automated, passing** (`npm test`, 22 tests; also runs in CI). |
+| Date logic (Malaysia time, 31-day range, weekday alignment, midnight roll, leap years) and time-slot and vehicle-field helpers | **Automated, passing** (`npm test`, 24 tests; also runs in CI). |
 | Production build and GitHub Pages deployment | **Working** (deployed and loading). |
 | Layout, calendar, overflow, dropdowns, details pop-up | Checked in browser (demo data and live as admin). |
 | Firestore rules tests (`tests/rules.test.js`) | **Written but never run**: they need the Firebase emulator, which needs **Java** (not installed on the dev PC). Run with `npm run test:rules` after installing Java 11+. Rules are published and in use; treat them as untested by automation. |
@@ -298,3 +302,4 @@ Runs on Firebase **Spark (free)**: quotas, not unlimited. Free daily limits are 
 6. "Name" renamed to **Company**; company auto-filled on bookings (fixed for standard users); click-a-company details pop-up; admin edit/delete companies.
 7. **Time slots**: admin defines allowed arrival times (`settings/slots`); bookings pick one (`timeSlot`). Rules must be re-published (7.5).
 8. **Vehicle details**: type of vehicle (Van/Truck; truck type only for trucks), cargo palletized yes/no, optional plate number. `truckType` is no longer required by the rules (vans have none). Rules must be re-published **before** deploying the code (7.5).
+9. **Blocked dates** (holidays): admin closes dates (`blockedDates` collection); companies cannot book onto them (UI + rules). Rules must be re-published before deploying.

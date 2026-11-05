@@ -69,11 +69,15 @@ service cloud.firestore {
         && d.updatedByName is string && d.updatedByName.size() <= 80;
     }
 
+    // A date an admin has closed (holiday etc.) has a document in blockedDates.
+    function dateOpen(date) { return !exists(/databases/$(database)/documents/blockedDates/$(date)); }
+
     match /bookings/{id} {
       allow read: if isActive();
 
       allow create: if isActive()
         && validBookingShape(request.resource.data)
+        && (isAdmin() || dateOpen(request.resource.data.bookingDate))
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.createdByName == profile(request.auth.uid).displayName
         && (isAdmin() || request.resource.data.eventName == request.resource.data.createdByName)
@@ -85,6 +89,7 @@ service cloud.firestore {
       allow update: if isActive()
         && (isOwner(resource.data) || isAdmin())
         && validBookingShape(request.resource.data)
+        && (isAdmin() || request.resource.data.bookingDate == resource.data.bookingDate || dateOpen(request.resource.data.bookingDate))
         && request.resource.data.createdBy == resource.data.createdBy
         && (isAdmin() || request.resource.data.eventName == resource.data.createdByName)
         && request.resource.data.createdByName == resource.data.createdByName
@@ -131,6 +136,20 @@ service cloud.firestore {
           && request.resource.data.slots.size() <= 24
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt == request.time));
+    }
+
+    // ---------- blocked dates (holidays etc.) ----------
+    // Companies cannot create or move a booking onto one of these dates; admins can.
+    match /blockedDates/{d} {
+      allow read: if isActive();
+      allow create, update: if isAdmin()
+        && d.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && request.resource.data.keys().hasOnly(['reason', 'createdBy', 'createdAt'])
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() <= 80
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow delete: if isAdmin();
     }
 
     // ---------- usernames (login lookup) ----------
