@@ -259,6 +259,20 @@ function fillCompany(current) {
   sel.value = pick;
 }
 
+// ---------- closed-date warning in the booking form ----------
+function checkBookingDate() {
+  const d = $('b-date').value;
+  const note = $('b-date-note');
+  const closed = state.blocked.has(d);
+  const reason = state.blocked.get(d) ? ` (${state.blocked.get(d)})` : '';
+  const unchanged = state.editing && state.known.get(state.editing.id)?.bookingDate === d;
+  if (!closed || unchanged) { note.hidden = true; $('b-save').disabled = false; return; }
+  note.hidden = false;
+  if (isAdmin()) { note.textContent = `${formatDisplay(d)} is closed for bookings${reason}. As an administrator you can still book it.`; $('b-save').disabled = false; } else {
+    note.textContent = `${formatDisplay(d)} is closed for bookings${reason}. Please choose another date.`; $('b-save').disabled = true;
+  }
+}
+
 // ---------- time slot dropdown ----------
 function fillSlot(current) {
   const list = state.slots;
@@ -334,6 +348,7 @@ function openBookingDialog(b, presetDate) {
   $('b-save').hidden = ro;
   $('b-meta').textContent = editing ? `Created by ${b.createdByName}. Last changed by ${b.updatedByName}.` : '';
   $('b-error').hidden = true;
+  checkBookingDate();
   if ($('dlg-day').open) $('dlg-day').close();
   dlg.showModal();
 }
@@ -576,6 +591,8 @@ function wire() {
   $('eu-cancel').onclick = () => $('dlg-edituser').close();
   $('b-files').onchange = (e) => addPickedFiles([...e.target.files]);
   $('form-booking').onsubmit = saveBooking;
+  $('b-date').addEventListener('input', checkBookingDate);
+  $('b-date').addEventListener('change', checkBookingDate);
   // "Type of truck" only applies to trucks; choosing Van hides it and forgets the choice.
   $('b-vehicle').onchange = () => {
     const truck = $('b-vehicle').value === 'Truck';
