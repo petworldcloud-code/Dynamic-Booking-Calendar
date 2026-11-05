@@ -1,6 +1,7 @@
 import { api, DEMO, CONFIGURED } from './api.js';
 import { renderCalendar, h } from './calendar.js';
 import { prepareFile, base64ToBlobUrl, formatSize, MAX_FILES } from './attachments.js';
+import { slotLabel, slotStart, makeSlot, cleanSlots, generateSlots, MAX_SLOTS } from './slot-utils.js';
 import {
   todayISO, addDays, buildRange, formatDisplay, isValidISO, watchToday, weekdayName, RANGE_DAYS
 } from './date-utils.js';
@@ -19,10 +20,12 @@ const state = {
   known: new Map(), // id -> latest booking seen (for conflict recovery)
   editing: null, // { id, expectedMs }
   companies: [], // admin: company names to book for
+  slots: [], // time slots admins allow, e.g. "08:00-10:00" (empty = no time slots)
+  draftSlots: [], // admin: list being edited in the Time slots dialog
   viewing: null,
   dayISO: null
 };
-let unRange = null; let unList = null; let unSession = null; let unUsers = null; let unCompanies = null;
+let unRange = null; let unList = null; let unSession = null; let unUsers = null; let unCompanies = null; let unSlots = null;
 
 // ---------- small UI helpers ----------
 function toast(msg, kind = 'ok') {
@@ -114,7 +117,7 @@ function onSession(s) {
     if (!wasActive) startApp();
     $('user-name').textContent = s.profile.displayName;
     $('user-role').textContent = s.profile.role === 'admin' ? 'Administrator' : 'Standard user';
-    $('btn-users').hidden = $('btn-settings').hidden = s.profile.role !== 'admin';
+    $('btn-users').hidden = $('btn-settings').hidden = $('btn-slots').hidden = s.profile.role !== 'admin';
     return;
   }
   stopApp();
@@ -156,13 +159,15 @@ function startApp() {
   unCompanies = isAdmin() ? api.watchUsers((list) => {
     state.companies = list.filter((u) => u.status !== 'suspended').map((u) => u.displayName).sort((a, b) => a.localeCompare(b));
   }, () => {}) : null;
+  unSlots?.();
+  unSlots = api.watchSlots((list) => { state.slots = list; }, () => {});
   startRange();
   startList();
 }
 function stopApp() {
-  unRange?.(); unList?.(); unUsers?.(); unCompanies?.();
-  unRange = unList = unUsers = unCompanies = null;
-  state.calBookings = []; state.listBookings = []; state.known.clear();
+  unRange?.(); unList?.(); unUsers?.(); unCompanies?.(); unSlots?.();
+  unRange = unList = unUsers = unCompanies = unSlots = null;
+  state.calBookings = []; state.listBookings = []; state.known.clear(); state.slots = [];
 }
 
 // ---------- rendering ----------
@@ -185,6 +190,7 @@ function drawCalendar() {
 }
 
 const bookingInfo = (b) => [
+  b.timeSlot ? `🕘 ${slotLabel(b.timeSlot)}` : null,
   b.truckType ? `${b.truckType} × ${b.truckCount}` : null,
   b.attachments?.length ? `📎 ${b.attachments.length}` : null
 ].filter(Boolean).join(' · ');
@@ -238,11 +244,25 @@ function fillCompany(current) {
   sel.value = pick;
 }
 
+// ---------- time slot dropdown ----------
+function fillSlot(current) {
+  const list = state.slots;
+  const sel = $('b-slot');
+  const retired = current && !list.includes(current); // slot was removed after this booking was made
+  $('b-slot-label').hidden = !(list.length || current);
+  sel.replaceChildren(
+    h('option', { value: '' }, 'Select…'),
+    ...list.map((s) => h('option', { value: s }, slotLabel(s))),
+    retired ? h('option', { value: current }, `${slotLabel(current)} (no longer offered)`) : null);
+  sel.value = current || '';
+}
+
 // ---------- booking details pop-up ----------
 function openView(b) {
   state.viewing = b;
   $('v-company').textContent = b.eventName;
   $('v-date').textContent = `${weekdayName(b.bookingDate)}, ${formatDisplay(b.bookingDate)}`;
+  $('v-slot').textContent = b.timeSlot ? slotLabel(b.timeSlot) : '—';
   $('v-truck').textContent = b.truckType || '—';
   $('v-count').textContent = b.truckCount ? `${b.truckCount} ${b.truckCount === 1 ? 'lorry' : 'lorries'}` : '—';
   $('v-notes').textContent = b.notes || '—';
@@ -270,13 +290,14 @@ function openBookingDialog(b, presetDate) {
   $('dlg-booking-title').textContent = editing ? (canEdit(b) ? 'Edit Booking' : 'Booking details') : 'Add Booking';
   $('b-date').value = editing ? b.bookingDate : (presetDate || state.today);
   fillCompany(editing ? b.eventName : null);
+  fillSlot(editing ? b.timeSlot : null);
   $('b-notes').value = editing ? (b.notes || '') : '';
   $('b-truck').value = editing ? (b.truckType || '') : '';
   $('b-count').value = editing && b.truckCount ? String(b.truckCount) : '';
   state.files = { bookingId: editing ? b.id : null, existing: editing ? [...(b.attachments || [])] : [], remove: [], add: [] };
   $('b-files').value = '';
   const ro = editing && !canEdit(b);
-  ['b-date', 'b-company', 'b-notes', 'b-truck', 'b-count', 'b-files'].forEach((id) => { $(id).disabled = ro; });
+  ['b-date', 'b-slot', 'b-company', 'b-notes', 'b-truck', 'b-count', 'b-files'].forEach((id) => { $(id).disabled = ro; });
   // Standard users: company is fixed to their own and shown as plain text, not a choice.
   $('b-company').hidden = !isAdmin();
   $('b-company-fixed').hidden = isAdmin();
@@ -353,9 +374,11 @@ async function saveBooking(e) {
   const err = $('b-error');
   const f = {
     bookingDate: $('b-date').value, eventName: $('b-company').value, notes: $('b-notes').value.trim(),
-    truckType: $('b-truck').value, truckCount: Number($('b-count').value)
+    truckType: $('b-truck').value, truckCount: Number($('b-count').value),
+    timeSlot: $('b-slot-label').hidden ? '' : $('b-slot').value
   };
   if (!isValidISO(f.bookingDate)) { err.textContent = 'Choose a valid date.'; err.hidden = false; return; }
+  if (state.slots.length && !f.timeSlot) { err.textContent = 'Choose a time slot.'; err.hidden = false; return; }
   if (!f.eventName) { err.textContent = 'Choose the company.'; err.hidden = false; return; }
   if (!f.truckType) { err.textContent = 'Choose the type of truck.'; err.hidden = false; return; }
   if (!(f.truckCount >= 1 && f.truckCount <= 6)) { err.textContent = 'Choose the number of trucks (1-6).'; err.hidden = false; return; }
@@ -442,6 +465,33 @@ function confirmDeleteUser(u) {
   dlg.showModal();
 }
 
+// ---------- admin: time slots ----------
+function slotProblem(msg) { const e = $('sl-error'); e.textContent = msg; e.hidden = !msg; }
+
+function drawSlotDraft() {
+  const items = state.draftSlots.map((s) => h('li', {}, slotLabel(s),
+    h('button', {
+      type: 'button', class: 'icon danger-text', 'aria-label': `Remove ${slotLabel(s)}`,
+      onclick: () => { state.draftSlots = state.draftSlots.filter((x) => x !== s); drawSlotDraft(); }
+    }, '✕')));
+  $('sl-list').replaceChildren(...(items.length ? items : [h('li', { class: 'muted' }, 'No time slots — bookings only need a date.')]));
+}
+
+function openSlots() {
+  state.draftSlots = [...state.slots];
+  slotProblem('');
+  drawSlotDraft();
+  $('dlg-slots').showModal();
+}
+
+function changeSlotDraft(build) {
+  try {
+    const next = cleanSlots(build());
+    if (next.length > MAX_SLOTS) throw new Error(`At most ${MAX_SLOTS} time slots.`);
+    state.draftSlots = next; slotProblem(''); drawSlotDraft();
+  } catch (x) { slotProblem(x.message); }
+}
+
 async function openSettings() {
   const dlg = $('dlg-settings'); $('s-error').hidden = true;
   try {
@@ -478,6 +528,21 @@ function wire() {
   $('btn-users').onclick = openUsers;
   $('users-close').onclick = () => { $('dlg-users').close(); unUsers?.(); unUsers = null; };
   $('btn-settings').onclick = openSettings;
+  $('btn-slots').onclick = openSlots;
+  $('sl-cancel').onclick = () => $('dlg-slots').close();
+  $('sl-add').onclick = () => changeSlotDraft(() => [...state.draftSlots, makeSlot($('sl-from').value, $('sl-to').value)]);
+  $('sg-go').onclick = () => changeSlotDraft(() => generateSlots($('sg-from').value, $('sg-to').value, $('sg-step').value));
+  for (const [ids, btn] of [[['sl-from', 'sl-to'], 'sl-add'], [['sg-from', 'sg-to'], 'sg-go']]) {
+    ids.forEach((id) => $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $(btn).click(); } }));
+  }
+  $('form-slots').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = $('sl-save'); btn.disabled = true; btn.textContent = 'Saving…'; slotProblem('');
+    try {
+      await api.saveSlots(state.session.user.uid, state.draftSlots);
+      $('dlg-slots').close(); toast(state.draftSlots.length ? 'Time slots saved.' : 'Time slots turned off.');
+    } catch (x) { slotProblem(friendly(x)); } finally { btn.disabled = false; btn.textContent = 'Save'; }
+  };
   $('form-newuser').onsubmit = async (e) => {
     e.preventDefault();
     const err = $('nu-error'); const btn = $('nu-save');

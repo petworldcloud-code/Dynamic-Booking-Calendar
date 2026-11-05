@@ -107,6 +107,15 @@ tbody tr:hover { background: #fbf7fc; }
 .evt { border: 0; border-radius: 6px; padding: 3px 8px; text-align: left; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .evt:hover { filter: brightness(.96); text-decoration: underline; }
 .evt-truck { color: var(--muted); font-size: .72rem; }
+.evt-time { font-weight: 700; font-size: .72rem; color: var(--purple); }
+.slotlist { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.slotlist li { display: flex; align-items: center; gap: 6px; background: var(--lavender); border-radius: 999px; padding: 4px 6px 4px 12px; font-size: .88rem; font-weight: 600; }
+.slotlist li.muted { background: none; font-weight: 400; padding-left: 0; }
+.row3 { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; margin: 6px 0; }
+details.gen { margin: 10px 0; padding: 8px 10px; background: var(--lavender); border-radius: 8px; }
+details.gen summary { cursor: pointer; font-weight: 600; color: var(--purple); }
+details.gen .ghost { margin-top: 4px; }
+@media (max-width: 600px) { .row3 { grid-template-columns: 1fr 1fr; } .row3 > button { grid-column: 1 / -1; } }
 .tone-blue { background: var(--pale-blue); }
 .tone-lavender { background: var(--lavender); }
 .tone-green { background: var(--pale-green); }

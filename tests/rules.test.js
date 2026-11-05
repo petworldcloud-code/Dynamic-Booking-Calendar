@@ -124,6 +124,34 @@ describe('settings', () => {
     await assertSucceeds(setDoc(doc(ctx('admin'), 'settings', 'retention'), data));
     await assertFails(setDoc(doc(ctx('alice'), 'settings', 'retention'), { ...data, updatedBy: 'alice' }));
   });
+
+  it('only admin writes time slots; every active user reads them', async () => {
+    const data = (uid, over = {}) => ({ slots: ['08:00-10:00', '10:00-12:00'], updatedBy: uid, updatedAt: serverTimestamp(), ...over });
+    await assertSucceeds(setDoc(doc(ctx('admin'), 'settings', 'slots'), data('admin')));
+    await assertFails(setDoc(doc(ctx('alice'), 'settings', 'slots'), data('alice')));
+    await assertFails(setDoc(doc(ctx('admin'), 'settings', 'slots'), data('admin', { slots: 'morning' })));
+    await assertFails(setDoc(doc(ctx('admin'), 'settings', 'slots'), data('admin', { slots: Array(25).fill('08:00-09:00') })));
+    await assertFails(setDoc(doc(ctx('admin'), 'settings', 'slots'), data('admin', { extra: 1 })));
+    await assertSucceeds(getDoc(doc(ctx('bob'), 'settings', 'slots')));
+    await assertFails(getDoc(doc(ctx('pat'), 'settings', 'slots')));
+  });
+});
+
+describe('booking time slot', () => {
+  it('accepts a well-formed slot and none at all', async () => {
+    await assertSucceeds(setDoc(doc(ctx('bob'), 'bookings', 't1'), booking('bob', { timeSlot: '08:00-10:00' })));
+    await assertSucceeds(setDoc(doc(ctx('bob'), 'bookings', 't2'), booking('bob')));
+  });
+  it('rejects a malformed slot', async () => {
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 't3'), booking('bob', { timeSlot: '8am' })));
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 't4'), booking('bob', { timeSlot: '25:00-26:00' })));
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 't5'), booking('bob', { timeSlot: 800 })));
+  });
+  it('owner can change the slot on an existing booking', async () => {
+    await assertSucceeds(updateDoc(doc(ctx('alice'), 'bookings', 'b1'), {
+      timeSlot: '09:00-10:00', updatedBy: 'alice', updatedAt: serverTimestamp()
+    }));
+  });
 });
 
 describe('usernames', () => {

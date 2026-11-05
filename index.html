@@ -35,6 +35,7 @@
           <small id="user-role"></small>
           <div class="user-actions">
             <button id="btn-users" class="link" hidden type="button">Users</button>
+            <button id="btn-slots" class="link" hidden type="button">Time slots</button>
             <button id="btn-settings" class="link" hidden type="button">Retention</button>
             <button id="btn-password" class="link" type="button">Password</button>
             <button id="btn-logout" class="link" type="button">Log out</button>
@@ -90,7 +91,10 @@
   <dialog id="dlg-booking">
     <form id="form-booking" method="dialog" novalidate>
       <h3 id="dlg-booking-title">Add Booking</h3>
-      <label>Date <input id="b-date" type="date" required></label>
+      <div class="row2">
+        <label>Date <input id="b-date" type="date" required></label>
+        <label id="b-slot-label" hidden>Time slot <select id="b-slot"></select></label>
+      </div>
       <label>Company <select id="b-company" required></select><input id="b-company-fixed" type="text" readonly tabindex="-1" hidden></label>
       <div class="row2">
         <label>Type of truck
@@ -146,6 +150,7 @@
     <div class="dlg-head"><h3 id="v-company"></h3><button class="ghost" id="v-close" type="button">Close</button></div>
     <dl class="details">
       <dt>Date</dt><dd id="v-date"></dd>
+      <dt>Time slot</dt><dd id="v-slot"></dd>
       <dt>Type of truck</dt><dd id="v-truck"></dd>
       <dt>Number of trucks</dt><dd id="v-count"></dd>
       <dt>Notes</dt><dd id="v-notes"></dd>
@@ -201,6 +206,39 @@
     </form>
     <p class="meta">The username is the name in lowercase, spaces become dots (e.g. "Ali Tan" logs in as ali.tan). Give the new user that username and the initial password; they change it with the Password button in the header. Set Status to "suspended" to block someone. Deleting a login is done in the Firebase Console.</p>
     <div class="table-wrap"><table><thead><tr><th>Company</th><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody id="users-rows"></tbody></table></div>
+  </dialog>
+
+  <!-- Admin: booking time slots -->
+  <dialog id="dlg-slots">
+    <form id="form-slots" method="dialog">
+      <h3>Booking time slots</h3>
+      <p class="meta">Companies must pick one of these times when they book. Remove them all to turn time slots off (bookings then only have a date). Changing the list does not change bookings that already exist.</p>
+      <ul id="sl-list" class="slotlist" aria-label="Current time slots"></ul>
+      <div class="row3">
+        <label>From <input id="sl-from" type="time" value="08:00" step="300"></label>
+        <label>To <input id="sl-to" type="time" value="10:00" step="300"></label>
+        <button type="button" class="ghost" id="sl-add">Add slot</button>
+      </div>
+      <details class="gen">
+        <summary>Quick fill: split a period into equal slots</summary>
+        <div class="row3">
+          <label>From <input id="sg-from" type="time" value="08:00" step="300"></label>
+          <label>To <input id="sg-to" type="time" value="12:00" step="300"></label>
+          <label>Every
+            <select id="sg-step">
+              <option value="30">30 minutes</option><option value="60" selected>1 hour</option>
+              <option value="90">1.5 hours</option><option value="120">2 hours</option>
+            </select>
+          </label>
+        </div>
+        <button type="button" class="ghost" id="sg-go">Replace the list with these slots</button>
+      </details>
+      <p id="sl-error" class="error" role="alert" hidden></p>
+      <div class="dlg-actions">
+        <button type="button" class="ghost" id="sl-cancel">Cancel</button>
+        <button type="submit" class="primary" id="sl-save">Save</button>
+      </div>
+    </form>
   </dialog>
 
   <!-- Admin: retention -->

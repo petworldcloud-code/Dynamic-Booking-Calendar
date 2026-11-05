@@ -1,6 +1,6 @@
 import {
   collection, doc, query, where, orderBy, limit, onSnapshot, getDoc, writeBatch,
-  runTransaction, serverTimestamp
+  runTransaction, serverTimestamp, deleteField
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 
@@ -55,6 +55,7 @@ export function createBooking(user, fields, files = []) {
   batch.set(ref, {
     bookingDate: fields.bookingDate, eventName: fields.eventName, notes: fields.notes || '',
     truckType: fields.truckType, truckCount: fields.truckCount, attachments: files.map(meta),
+    ...(fields.timeSlot ? { timeSlot: fields.timeSlot } : {}),
     createdBy: user.uid, createdByName: user.displayName, createdAt: serverTimestamp(),
     updatedBy: user.uid, updatedByName: user.displayName, updatedAt: serverTimestamp()
   });
@@ -76,6 +77,7 @@ export function updateBooking(user, id, expectedUpdatedMs, fields, { add = [], r
     tx.update(ref, {
       bookingDate: fields.bookingDate, eventName: fields.eventName, notes: fields.notes || '',
       truckType: fields.truckType, truckCount: fields.truckCount,
+      timeSlot: fields.timeSlot || deleteField(),
       attachments: [...kept, ...add.map(meta)],
       updatedBy: user.uid, updatedByName: user.displayName, updatedAt: serverTimestamp()
     });

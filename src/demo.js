@@ -8,6 +8,8 @@ let seq = 0;
 let rows = [];
 const subs = new Set();
 const notify = () => subs.forEach((f) => f());
+let slots = ['08:00-09:00', '09:00-10:00', '10:00-11:00', '11:00-12:00'];
+const slotSubs = new Set();
 
 const names = ['Tefal', 'Sony', '3M', 'GOON', 'Nestle', 'Unilever', 'Coca Cola', 'Watsons', 'Dove', 'Pepsi', 'Samsung', 'Lenovo'];
 function mk(dayOffset, eventName, n = 0) {
@@ -15,6 +17,7 @@ function mk(dayOffset, eventName, n = 0) {
   return {
     id: `d${String(seq).padStart(3, '0')}`, bookingDate: addDays(todayISO(), dayOffset), eventName, notes: '',
     truckType: ['40footer', '20footer', '10ton', '5ton', '3ton', '1ton'][seq % 6], truckCount: (seq % 6) + 1, attachments: [],
+    timeSlot: ['08:00-09:00', '09:00-10:00', '10:00-11:00', '11:00-12:00'][seq % 4],
     createdBy: me.uid, createdByName: me.displayName, updatedBy: me.uid, updatedByName: me.displayName,
     createdAt: { toMillis: () => 1000 + seq }, updatedAt: { toMillis: () => 1000 + seq + n }
   };
@@ -59,5 +62,11 @@ export const api = {
   async updateUser() {},
   async deleteUser() {},
   getRetention: async () => ({ autoDeleteEnabled: false, retentionDays: 90 }),
-  saveRetention: async () => {}
+  saveRetention: async () => {},
+  watchSlots(cb) {
+    const run = () => cb([...slots]);
+    slotSubs.add(run); run();
+    return () => slotSubs.delete(run);
+  },
+  async saveSlots(uid, list) { slots = [...list]; slotSubs.forEach((f) => f()); }
 };
