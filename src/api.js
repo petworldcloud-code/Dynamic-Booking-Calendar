@@ -6,6 +6,7 @@ import * as users from './users.js';
 import * as retention from './retention.js';
 import * as slots from './slots.js';
 import * as blocked from './blocked.js';
+import * as notify from './notify.js';
 import { isConfigured } from './firebase.js';
 import * as demo from './demo.js';
 
@@ -22,7 +23,9 @@ const real = {
   watchUsers: users.watchUsers, updateUser: users.updateUser, deleteUser: users.deleteUser,
   getRetention: retention.getRetention, saveRetention: retention.saveRetention,
   watchSlots: slots.watchSlots, saveSlots: slots.saveSlots,
-  watchBlocked: blocked.watchBlocked, blockDates: blocked.blockDates, unblockDate: blocked.unblockDate
+  watchBlocked: blocked.watchBlocked, blockDates: blocked.blockDates, unblockDate: blocked.unblockDate,
+  watchRecipients: notify.watchRecipients, saveRecipient: notify.saveRecipient, removeRecipient: notify.removeRecipient,
+  watchNotifySettings: notify.watchNotifySettings, saveNotifySettings: notify.saveNotifySettings
 };
 
 export const api = DEMO ? demo.api : real;

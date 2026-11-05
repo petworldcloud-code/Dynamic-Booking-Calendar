@@ -3,6 +3,7 @@ import { renderCalendar, h } from './calendar.js';
 import { prepareFile, base64ToBlobUrl, formatSize, MAX_FILES } from './attachments.js';
 import { vehicleOf, vehicleText, palletText, vehicleFields, vehicleProblem } from './booking-utils.js';
 import { slotLabel, slotStart, makeSlot, cleanSlots, generateSlots, MAX_SLOTS } from './slot-utils.js';
+import { scopeText, DEFAULT_NOTIFY } from './notify-utils.js';
 import {
   todayISO, addDays, dateSpan, buildRange, formatDisplay, isValidISO, watchToday, weekdayName, RANGE_DAYS
 } from './date-utils.js';
@@ -24,10 +25,13 @@ const state = {
   blocked: new Map(), // closed dates: "YYYY-MM-DD" -> reason
   slots: [], // time slots admins allow, e.g. "08:00-10:00" (empty = no time slots)
   draftSlots: [], // admin: list being edited in the Time slots dialog
+  recipients: [], // admin: email alert recipients
+  notify: { ...DEFAULT_NOTIFY },
+  editingEmail: null,
   viewing: null,
   dayISO: null
 };
-let unRange = null; let unList = null; let unSession = null; let unUsers = null; let unCompanies = null; let unSlots = null; let unBlocked = null;
+let unRange = null; let unList = null; let unSession = null; let unUsers = null; let unCompanies = null; let unSlots = null; let unBlocked = null; let unRecips = null; let unNotify = null;
 
 // ---------- small UI helpers ----------
 function toast(msg, kind = 'ok') {
@@ -119,7 +123,7 @@ function onSession(s) {
     if (!wasActive) startApp();
     $('user-name').textContent = s.profile.displayName;
     $('user-role').textContent = s.profile.role === 'admin' ? 'Administrator' : 'Standard user';
-    $('btn-users').hidden = $('btn-settings').hidden = $('btn-slots').hidden = $('btn-blocked').hidden = s.profile.role !== 'admin';
+    $('btn-users').hidden = $('btn-settings').hidden = $('btn-slots').hidden = $('btn-blocked').hidden = $('btn-notify').hidden = s.profile.role !== 'admin';
     return;
   }
   stopApp();
@@ -169,12 +173,19 @@ function startApp() {
     if (state.dayISO && $('dlg-day').open) drawDay();
     if ($('dlg-blocked').open) drawBlockedList();
   }, () => {});
+  unRecips?.(); unNotify?.();
+  unRecips = unNotify = null;
+  if (isAdmin()) {
+    unRecips = api.watchRecipients((list) => { state.recipients = list; if ($('dlg-notify').open) drawRecipients(); }, () => {});
+    unNotify = api.watchNotifySettings((s) => { state.notify = s; }, () => {});
+  }
   startRange();
   startList();
 }
 function stopApp() {
-  unRange?.(); unList?.(); unUsers?.(); unCompanies?.(); unSlots?.(); unBlocked?.();
-  unRange = unList = unUsers = unCompanies = unSlots = unBlocked = null;
+  unRange?.(); unList?.(); unUsers?.(); unCompanies?.(); unSlots?.(); unBlocked?.(); unRecips?.(); unNotify?.();
+  unRange = unList = unUsers = unCompanies = unSlots = unBlocked = unRecips = unNotify = null;
+  state.recipients = [];
   state.calBookings = []; state.listBookings = []; state.known.clear(); state.slots = []; state.blocked = new Map();
 }
 
@@ -542,6 +553,77 @@ async function addBlocked(e) {
   } catch (x) { blockProblem(friendly(x)); } finally { btn.disabled = false; btn.textContent = 'Block'; }
 }
 
+// ---------- admin: email alerts ----------
+function notifyProblem(msg) { const e = $('nt-error'); e.textContent = msg; e.hidden = !msg; }
+
+function drawCompanyBoxes(ticked = []) {
+  const names = [...new Set([...state.companies, ...ticked])].sort((a, b) => a.localeCompare(b));
+  $('nt-companies').replaceChildren(...(names.length ? names.map((n) => h('label', { class: 'check' },
+    h('input', { type: 'checkbox', value: n, checked: ticked.includes(n) }), n)) : [h('span', { class: 'muted' }, 'No companies yet.')]));
+  $('nt-companies').classList.toggle('off', $('nt-all').checked);
+}
+
+function resetNotifyForm() {
+  state.editingEmail = null;
+  $('form-notify').reset(); $('nt-email').readOnly = false;
+  $('nt-form-title').textContent = 'Add an email address'; $('nt-save').textContent = 'Add'; $('nt-reset').hidden = true;
+  notifyProblem(''); drawCompanyBoxes();
+}
+
+function drawRecipients() {
+  const rows = state.recipients.map((r) => h('li', {},
+    h('span', {}, h('strong', {}, r.email), ` — ${scopeText(r)}`),
+    h('span', { class: 'acts' },
+      h('button', { type: 'button', class: 'icon', onclick: () => editRecipient(r) }, 'Edit'),
+      h('button', {
+        type: 'button', class: 'icon danger-text', 'aria-label': `Remove ${r.email}`,
+        onclick: async () => {
+          try { await api.removeRecipient(r.email); if (state.editingEmail === r.email) resetNotifyForm(); toast('Email removed.'); } catch (x) { toast(friendly(x), 'err'); }
+        }
+      }, 'Remove'))));
+  $('nt-list').replaceChildren(...(rows.length ? rows : [h('li', { class: 'muted' }, 'No email addresses yet — nobody is notified.')]));
+}
+
+function editRecipient(r) {
+  state.editingEmail = r.email;
+  $('nt-email').value = r.email; $('nt-email').readOnly = true;
+  $('nt-all').checked = r.allCompanies; drawCompanyBoxes(r.companies);
+  $('nt-form-title').textContent = 'Change which companies this email covers'; $('nt-save').textContent = 'Save'; $('nt-reset').hidden = false;
+  notifyProblem('');
+}
+
+function openNotify() {
+  $('nt-hour').replaceChildren(...Array.from({ length: 24 }, (_, i) => h('option', { value: String(i) }, `${String(i).padStart(2, '0')}:00`)));
+  const s = state.notify;
+  $('nt-new').checked = s.onNew; $('nt-day').checked = s.dayBefore; $('nt-two').checked = s.twoHours; $('nt-hour').value = String(s.dayBeforeHour);
+  resetNotifyForm(); drawRecipients();
+  $('dlg-notify').showModal();
+}
+
+async function saveNotifyForm(e) {
+  e.preventDefault();
+  const btn = $('nt-save'); notifyProblem('');
+  try {
+    const companies = [...$('nt-companies').querySelectorAll('input:checked')].map((i) => i.value);
+    btn.disabled = true;
+    await api.saveRecipient(state.session.user.uid,
+      { email: $('nt-email').value, allCompanies: $('nt-all').checked, companies },
+      state.recipients.length, !state.editingEmail);
+    toast(state.editingEmail ? 'Saved.' : 'Email added.');
+    resetNotifyForm();
+  } catch (x) { notifyProblem(friendly(x)); } finally { btn.disabled = false; }
+}
+
+async function saveNotifyChoices() {
+  const btn = $('nt-save-settings'); btn.disabled = true;
+  try {
+    await api.saveNotifySettings(state.session.user.uid, {
+      onNew: $('nt-new').checked, dayBefore: $('nt-day').checked, twoHours: $('nt-two').checked, dayBeforeHour: Number($('nt-hour').value)
+    });
+    toast('Saved.');
+  } catch (x) { toast(friendly(x), 'err'); } finally { btn.disabled = false; }
+}
+
 // ---------- admin: time slots ----------
 function slotProblem(msg) { const e = $('sl-error'); e.textContent = msg; e.hidden = !msg; }
 
@@ -615,6 +697,12 @@ function wire() {
   $('btn-settings').onclick = openSettings;
   $('btn-slots').onclick = openSlots;
   $('btn-blocked').onclick = openBlocked;
+  $('btn-notify').onclick = openNotify;
+  $('nt-close').onclick = () => $('dlg-notify').close();
+  $('nt-reset').onclick = resetNotifyForm;
+  $('nt-all').onchange = () => $('nt-companies').classList.toggle('off', $('nt-all').checked);
+  $('form-notify').onsubmit = saveNotifyForm;
+  $('nt-save-settings').onclick = saveNotifyChoices;
   $('bl-close').onclick = () => $('dlg-blocked').close();
   $('form-blocked').onsubmit = addBlocked;
   $('sl-cancel').onclick = () => $('dlg-slots').close();

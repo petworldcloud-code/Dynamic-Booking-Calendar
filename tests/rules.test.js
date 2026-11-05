@@ -279,3 +279,31 @@ describe('user deletion', () => {
     await assertSucceeds(updateDoc(doc(ctx('admin'), 'users', 'bob'), { displayName: 'Bob Co', username: 'bob', updatedAt: serverTimestamp() }));
   });
 });
+
+describe('email alerts', () => {
+  const rec = (uid, o = {}) => ({ email: 'a@x.co', allCompanies: false, companies: ['alice'], createdBy: uid, createdAt: serverTimestamp(), ...o });
+  const st = (uid, o = {}) => ({ onNew: true, dayBefore: true, twoHours: false, dayBeforeHour: 17, updatedBy: uid, updatedAt: serverTimestamp(), ...o });
+
+  it('only admin reads or writes recipients', async () => {
+    await assertSucceeds(setDoc(doc(ctx('admin'), 'notifyRecipients', 'a@x.co'), rec('admin')));
+    await assertSucceeds(getDoc(doc(ctx('admin'), 'notifyRecipients', 'a@x.co')));
+    await assertFails(getDoc(doc(ctx('alice'), 'notifyRecipients', 'a@x.co')));
+    await assertFails(setDoc(doc(ctx('alice'), 'notifyRecipients', 'b@x.co'), rec('alice', { email: 'b@x.co' })));
+    await assertSucceeds(deleteDoc(doc(ctx('admin'), 'notifyRecipients', 'a@x.co')));
+  });
+  it('recipient id must equal the email, be an email, and name a company or All', async () => {
+    await assertFails(setDoc(doc(ctx('admin'), 'notifyRecipients', 'z@x.co'), rec('admin', { email: 'other@x.co' })));
+    await assertFails(setDoc(doc(ctx('admin'), 'notifyRecipients', 'bad'), rec('admin', { email: 'bad' })));
+    await assertFails(setDoc(doc(ctx('admin'), 'notifyRecipients', 'n@x.co'), rec('admin', { email: 'n@x.co', companies: [] })));
+    await assertSucceeds(setDoc(doc(ctx('admin'), 'notifyRecipients', 'n@x.co'), rec('admin', { email: 'n@x.co', allCompanies: true, companies: [] })));
+  });
+  it('only admin saves notification settings, hour 0-23', async () => {
+    await assertSucceeds(setDoc(doc(ctx('admin'), 'settings', 'notifications'), st('admin')));
+    await assertFails(setDoc(doc(ctx('admin'), 'settings', 'notifications'), st('admin', { dayBeforeHour: 24 })));
+    await assertFails(setDoc(doc(ctx('alice'), 'settings', 'notifications'), st('alice')));
+  });
+  it('the notification log is closed to the app', async () => {
+    await assertFails(setDoc(doc(ctx('admin'), 'notifyLog', 'x'), { sentAt: serverTimestamp() }));
+    await assertFails(getDoc(doc(ctx('admin'), 'notifyLog', 'x')));
+  });
+});

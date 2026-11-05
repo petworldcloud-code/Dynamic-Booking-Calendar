@@ -126,6 +126,9 @@ vite.config.js              base path = /Dynamic-Booking-Calendar/ (GitHub Pages
 | `bookings/{id}/attachments` | random ID | `name`, `type`, `size`, `data` (base64 file), `createdBy`, `createdAt` |
 | `settings` | `retention` | `autoDeleteEnabled` (false by default), `retentionDays`, `updatedAt`, `updatedBy` |
 | `blockedDates` | the date `YYYY-MM-DD` | `reason` (text, max 80), `createdBy`, `createdAt`. A document existing = that date is closed to all new bookings. Admin writes, active users read. |
+| `notifyRecipients` | the lowercase email | `email`, `allCompanies` (bool), `companies` (list of company names), `createdBy`, `createdAt`. **Admin only** (read and write): emails are private. |
+| `settings` | `notifications` | `onNew`, `dayBefore`, `twoHours` (bools), `dayBeforeHour` (0-23), `updatedAt`, `updatedBy`. |
+| `notifyLog` | `kind_bookingId_date_slot` | Written only by the Apps Script (owner access bypasses the rules; no one in the app can read or write it). Marks a mail as already sent. |
 | `settings` | `slots` | `slots` (list of `"HH:MM-HH:MM"` 24-hour text, max 24), `updatedAt`, `updatedBy`. Empty/missing = no time slots, bookings only have a date. |
 
 - Dates are stored as plain `YYYY-MM-DD` text, never as timestamps, so timezones cannot shift a booking.
@@ -181,6 +184,23 @@ Header -> **Time slots**. Add slots one by one (From / To -> **Add slot**) or us
 
 ### 7.3c Block a date, e.g. a public holiday (admin)
 Header -> **Blocked dates**. Choose **From** (and **To** for several days), type a **Reason**, press **Block** (max 62 days at once). Blocked days show hatched with "Closed: reason" on the calendar. Nobody can book or move a booking onto that date, **administrators included** (the form shows a warning and Save is disabled, and the rules enforce it too). To book on it, press **Unblock** first. Bookings already on a date stay. To reopen a date press **Unblock** in the same dialog (only upcoming blocked dates are listed).
+
+### 7.3d Email alerts: new bookings and reminders (admin)
+**What it does.** Header -> **Email alerts**:
+- **What to send:** (a) an email when a booking is added, (b) a reminder the day before at an hour you choose (default 17:00), (c) a reminder 2 hours before the booking's time slot starts (bookings without a time slot only get the day-before reminder). Tick what you want, press **Save what to send**.
+- **Who receives them:** type an email, then either leave **All companies** ticked or untick it and tick one or more companies (one address can cover several companies). **Add**. **Edit** changes the companies of an existing address; **Remove** deletes it. Emails go out only for bookings of the companies ticked for that address.
+- A booking is matched by its company name (`eventName`). If you rename a company, edit the address and tick the new name.
+
+**How it works.** The site is on the free Firebase Spark plan, which cannot send email by itself. `apps-script/Code.gs` is a small free Google Apps Script that runs on the owner's Google account every 5 minutes, reads Firestore with the owner's own access (no keys stored anywhere), and sends the mail from the owner's Gmail. Emails can therefore arrive up to about 5 minutes late. Each mail goes out once (tracked in the `notifyLog` collection, which only the script can touch). A booking that is rescheduled gets reminded again for its new date/slot. A booking added after a reminder's moment has already passed gets only the "new booking" mail, not an instant reminder. The old backlog is never mailed: only bookings created after `setup()` ran.
+
+**One-time setup (owner Google account, petworldcloud@gmail.com):**
+1. Go to https://script.google.com -> **New project**. Name it "Booking Calendar Mailer".
+2. Project Settings (gear) -> tick **Show "appsscript.json" manifest file in editor**. Replace the contents of `appsscript.json` with `apps-script/appsscript.json` from this repo, and the contents of `Code.gs` with `apps-script/Code.gs`. Save.
+3. In the function list pick **sendTest** -> Run. Google asks you to authorise (Gmail sending, Firestore, triggers): choose the owner account -> Advanced -> Go to the project -> Allow. A test email arrives in the inbox.
+4. Pick **setup** -> Run. It installs the 5-minute timer and does a first check. If the log shows `Firestore 403`, see Troubleshooting.
+5. In the app add your first email under Email alerts and book something to test.
+
+To stop all emails: run **stopAll** in the script editor (or remove the addresses in the app). Rules for `notifyRecipients` and `settings/notifications` must be published (7.5) before the Email alerts screen can save.
 
 ### 7.4 Forgotten password
 - Company has a real email: login screen -> "Forgot password?".
@@ -249,7 +269,7 @@ Notes for Windows: run npm from **PowerShell or CMD**. In Git Bash `npm run ...`
 
 | Area | Status |
 |---|---|
-| Date logic (Malaysia time, 31-day range, weekday alignment, midnight roll, leap years) and time-slot and vehicle-field helpers | **Automated, passing** (`npm test`, 24 tests; also runs in CI). |
+| Date logic (Malaysia time, 31-day range, weekday alignment, midnight roll, leap years) and time-slot and vehicle-field helpers | **Automated, passing** (`npm test`, 32 tests, including the Apps Script's pure helpers; also runs in CI). |
 | Production build and GitHub Pages deployment | **Working** (deployed and loading). |
 | Layout, calendar, overflow, dropdowns, details pop-up | Checked in browser (demo data and live as admin). |
 | Firestore rules tests (`tests/rules.test.js`) | **Written but never run**: they need the Firebase emulator, which needs **Java** (not installed on the dev PC). Run with `npm run test:rules` after installing Java 11+. Rules are published and in use; treat them as untested by automation. |
@@ -270,6 +290,7 @@ Notes for Windows: run npm from **PowerShell or CMD**. In Git Bash `npm run ...`
 | Save says "The server did not confirm the save" | Offline/blocked connection. Nothing was saved; retry. |
 | Attachment rejected | Over 600 KB (non-picture), wrong type, or more than 5 files. |
 | Deploy workflow fails | Open the failed run in GitHub -> Actions. Check the six `VITE_FIREBASE_*` **Variables** exist, and that tests pass. |
+| Emails do not arrive | In script.google.com open the mailer project -> Executions: look for errors. `Firestore 403` = the owner account lacks access or the Cloud Firestore API is off for project `dynamic-booking-calendar` (Google Cloud Console -> APIs). Also check Spam, that the address is listed under Email alerts for that company, that the type is ticked, and that the timer exists (Triggers: `checkAll`, every 5 minutes; re-run `setup`). |
 | Console shows `net::ERR_FAILED` / blocked for Firebase | Firewall/ad-blocker on the visitor's side. |
 
 ---
@@ -288,7 +309,8 @@ Runs on Firebase **Spark (free)**: quotas, not unlimited. Free daily limits are 
 - Attachments capped at ~600 KB because they live in Firestore.
 - Rules tests not yet automated in CI.
 - Time slots have no capacity limit (many companies can pick the same slot) and are not per-weekday.
-- Optional: Firebase App Check, email notifications, export to Excel/CSV, per-company booking limits, per-slot capacity.
+- Email: sent every 5 minutes by an Apps Script on the owner's Gmail, so up to ~5 minutes late; a free Google account allows about 100 recipients a day (each address on each mail counts). Booking edits and deletions are not mailed. If the Google account is changed or the script is deleted, emails stop silently.
+- Optional: Firebase App Check, export to Excel/CSV, per-company booking limits, per-slot capacity.
 
 ---
 
@@ -304,3 +326,4 @@ Runs on Firebase **Spark (free)**: quotas, not unlimited. Free daily limits are 
 8. **Vehicle details**: type of vehicle (Van/Truck; truck type only for trucks), cargo palletized yes/no, optional plate number. `truckType` is no longer required by the rules (vans have none). Rules must be re-published **before** deploying the code (7.5).
 9. **Blocked dates** (holidays): admin closes dates (`blockedDates` collection); nobody, admins included, can book onto them (UI + rules). Rules must be re-published before deploying.
 10. **Type of delivery** dropdown (Delivery stock / Container pull / Unloading). Rules must be re-published before deploying.
+11. **Email alerts**: admin screen for recipients (per-company filter, multi-select) and for new-booking / day-before / 2-hours-before mails, sent by the Google Apps Script in `apps-script/` (7.3d). Rules must be re-published before deploying.

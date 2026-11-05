@@ -116,6 +116,13 @@ tbody tr:hover { background: #fbf7fc; }
 .blocklist li { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: .88rem; }
 .blocklist li.muted { border: 0; background: none; padding-left: 0; }
 .day-closed { color: var(--danger); font-weight: 600; margin: 4px 0 8px; }
+.ntbox { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin: 10px 0; display: flex; flex-direction: column; gap: 8px; background: var(--lavender); }
+.ntbox legend { font-weight: 700; padding: 0 4px; }
+.ntcos { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 12px; max-height: 26vh; overflow: auto; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+.ntcos.off { opacity: .45; pointer-events: none; }
+.ntcos label { font-size: .88rem; text-align: left; }
+.ntcos .muted { grid-column: 1 / -1; }
+.blocklist li .acts { display: flex; gap: 4px; }
 .evt-time { font-weight: 700; font-size: .72rem; color: var(--purple); }
 .slotlist { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .slotlist li { display: flex; align-items: center; gap: 6px; background: var(--lavender); border-radius: 999px; padding: 4px 6px 4px 12px; font-size: .88rem; font-weight: 600; }

@@ -136,7 +136,34 @@ service cloud.firestore {
           && request.resource.data.slots is list
           && request.resource.data.slots.size() <= 24
           && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time)
+        // Which emails are sent: new booking / day-before / 2-hours-before, and the hour (0-23) the day-before mail goes out.
+        || (doc == 'notifications'
+          && request.resource.data.keys().hasOnly(['onNew', 'dayBefore', 'twoHours', 'dayBeforeHour', 'updatedAt', 'updatedBy'])
+          && request.resource.data.onNew is bool
+          && request.resource.data.dayBefore is bool
+          && request.resource.data.twoHours is bool
+          && request.resource.data.dayBeforeHour is int
+          && request.resource.data.dayBeforeHour >= 0
+          && request.resource.data.dayBeforeHour <= 23
+          && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt == request.time));
+    }
+
+    // ---------- email notification recipients (admin only; the sender script reads them with the owner's access) ----------
+    match /notifyRecipients/{e} {
+      allow read, delete: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['email', 'allCompanies', 'companies', 'createdBy', 'createdAt'])
+        && request.resource.data.email == e
+        && e.size() <= 120
+        && e.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$')
+        && request.resource.data.allCompanies is bool
+        && request.resource.data.companies is list
+        && request.resource.data.companies.size() <= 100
+        && (request.resource.data.allCompanies || request.resource.data.companies.size() > 0)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
     }
 
     // ---------- blocked dates (holidays etc.) ----------

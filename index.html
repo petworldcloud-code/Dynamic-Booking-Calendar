@@ -37,6 +37,7 @@
             <button id="btn-users" class="link" hidden type="button">Users</button>
             <button id="btn-slots" class="link" hidden type="button">Time slots</button>
             <button id="btn-blocked" class="link" hidden type="button">Blocked dates</button>
+            <button id="btn-notify" class="link" hidden type="button">Email alerts</button>
             <button id="btn-settings" class="link" hidden type="button">Retention</button>
             <button id="btn-password" class="link" type="button">Password</button>
             <button id="btn-logout" class="link" type="button">Log out</button>
@@ -284,6 +285,37 @@
         <button type="submit" class="primary" id="sl-save">Save</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Admin: email alerts -->
+  <dialog id="dlg-notify">
+    <div class="dlg-head"><h3>Email alerts</h3><button class="ghost" id="nt-close" type="button">Close</button></div>
+    <p class="meta">Choose who gets an email about bookings, and for which companies. One address can cover several companies.</p>
+
+    <fieldset class="ntbox">
+      <legend>What to send</legend>
+      <label class="check"><input id="nt-new" type="checkbox"> Email when a booking is added</label>
+      <label class="check"><input id="nt-day" type="checkbox"> Reminder the day before, sent at
+        <select id="nt-hour" aria-label="Hour the day-before reminder is sent"></select></label>
+      <label class="check"><input id="nt-two" type="checkbox"> Reminder 2 hours before the time slot starts (bookings without a time slot get the day-before reminder only)</label>
+      <button type="button" class="primary" id="nt-save-settings">Save what to send</button>
+    </fieldset>
+
+    <h4>Who receives them</h4>
+    <ul id="nt-list" class="blocklist" aria-label="Email recipients"></ul>
+
+    <form id="form-notify" class="ntbox" autocomplete="off">
+      <legend id="nt-form-title">Add an email address</legend>
+      <label>Email <input id="nt-email" type="email" maxlength="120" placeholder="name@example.com" required></label>
+      <label class="check"><input id="nt-all" type="checkbox" checked> All companies</label>
+      <div id="nt-companies" class="ntcos" aria-label="Companies this email is told about"></div>
+      <p id="nt-error" class="error" role="alert" hidden></p>
+      <div class="dlg-actions">
+        <button type="button" class="ghost" id="nt-reset" hidden>Cancel edit</button>
+        <button type="submit" class="primary" id="nt-save">Add</button>
+      </div>
+    </form>
+    <p class="meta">Emails are sent by the Google Apps Script described in the README (it checks every few minutes), so they can arrive a few minutes late. Company names are matched by name: if you rename a company, tick it again here.</p>
   </dialog>
 
   <!-- Admin: retention -->
