@@ -241,7 +241,7 @@ function drawDay() {
   const closed = state.blocked.has(state.dayISO);
   $('day-closed').hidden = !closed;
   $('day-closed').textContent = closed ? `Closed for bookings${state.blocked.get(state.dayISO) ? `: ${state.blocked.get(state.dayISO)}` : ''}.` : '';
-  $('day-add').hidden = closed && !isAdmin();
+  $('day-add').hidden = closed;
   $('day-list').replaceChildren(...(list.length ? list.map((b) => h('li', {},
     h('div', {}, h('button', { class: 'cell-link', type: 'button', onclick: () => openView(b) }, h('strong', {}, b.eventName)), h('span', { class: 'sub' }, bookingInfo(b))),
     actionButtons(b))) : [h('li', { class: 'muted' }, 'No bookings on this date.')]));
@@ -268,9 +268,8 @@ function checkBookingDate() {
   const unchanged = state.editing && state.known.get(state.editing.id)?.bookingDate === d;
   if (!closed || unchanged) { note.hidden = true; $('b-save').disabled = false; return; }
   note.hidden = false;
-  if (isAdmin()) { note.textContent = `${formatDisplay(d)} is closed for bookings${reason}. As an administrator you can still book it.`; $('b-save').disabled = false; } else {
-    note.textContent = `${formatDisplay(d)} is closed for bookings${reason}. Please choose another date.`; $('b-save').disabled = true;
-  }
+  note.textContent = `${formatDisplay(d)} is closed for bookings${reason}. Please choose another date${isAdmin() ? ' (or remove the block under Blocked dates)' : ''}.`;
+  $('b-save').disabled = true;
 }
 
 // ---------- time slot dropdown ----------
@@ -426,7 +425,7 @@ async function saveBooking(e) {
   const fail = (m) => { err.textContent = m; err.hidden = false; };
   if (!isValidISO(f.bookingDate)) return fail('Choose a valid date.');
   const dateChanged = !state.editing || state.known.get(state.editing.id)?.bookingDate !== f.bookingDate;
-  if (state.blocked.has(f.bookingDate) && !isAdmin() && dateChanged) {
+  if (state.blocked.has(f.bookingDate) && dateChanged) {
     return fail(`${formatDisplay(f.bookingDate)} is closed for bookings${state.blocked.get(f.bookingDate) ? ` (${state.blocked.get(f.bookingDate)})` : ''}. Please choose another date.`);
   }
   if (state.slots.length && !f.timeSlot) return fail('Choose a time slot.');

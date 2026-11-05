@@ -181,13 +181,13 @@ describe('blocked dates', () => {
     await assertFails(deleteDoc(doc(ctx('alice'), 'blockedDates', '2026-12-25')));
     await assertSucceeds(deleteDoc(doc(ctx('admin'), 'blockedDates', '2026-12-25')));
   });
-  it('a company cannot book a blocked date, an admin can', async () => {
+  it('nobody, admin included, can book a blocked date', async () => {
     await block();
     await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'k1'), booking('bob')));
-    await assertSucceeds(setDoc(doc(ctx('admin'), 'bookings', 'k2'), booking('admin')));
+    await assertFails(setDoc(doc(ctx('admin'), 'bookings', 'k2'), booking('admin')));
     await assertSucceeds(setDoc(doc(ctx('bob'), 'bookings', 'k3'), booking('bob', { bookingDate: '2026-10-28' })));
   });
-  it('a company cannot move a booking onto a blocked date but can edit one already on it', async () => {
+  it('nobody can move a booking onto a blocked date, but a booking already on one can be edited', async () => {
     await block('2026-11-01');
     await assertFails(updateDoc(doc(ctx('alice'), 'bookings', 'b1'), { bookingDate: '2026-11-01', updatedBy: 'alice', updatedAt: serverTimestamp() }));
     await block('2026-10-27');

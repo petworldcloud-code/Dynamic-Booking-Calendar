@@ -78,7 +78,7 @@ service cloud.firestore {
 
       allow create: if isActive()
         && validBookingShape(request.resource.data)
-        && (isAdmin() || dateOpen(request.resource.data.bookingDate))
+        && dateOpen(request.resource.data.bookingDate)
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.createdByName == profile(request.auth.uid).displayName
         && (isAdmin() || request.resource.data.eventName == request.resource.data.createdByName)
@@ -90,7 +90,7 @@ service cloud.firestore {
       allow update: if isActive()
         && (isOwner(resource.data) || isAdmin())
         && validBookingShape(request.resource.data)
-        && (isAdmin() || request.resource.data.bookingDate == resource.data.bookingDate || dateOpen(request.resource.data.bookingDate))
+        && (request.resource.data.bookingDate == resource.data.bookingDate || dateOpen(request.resource.data.bookingDate))
         && request.resource.data.createdBy == resource.data.createdBy
         && (isAdmin() || request.resource.data.eventName == resource.data.createdByName)
         && request.resource.data.createdByName == resource.data.createdByName
@@ -140,7 +140,7 @@ service cloud.firestore {
     }
 
     // ---------- blocked dates (holidays etc.) ----------
-    // Companies cannot create or move a booking onto one of these dates; admins can.
+    // Nobody (admins included) can create or move a booking onto one of these dates; remove the block first.
     match /blockedDates/{d} {
       allow read: if isActive();
       allow create, update: if isAdmin()
