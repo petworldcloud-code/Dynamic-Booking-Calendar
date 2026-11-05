@@ -1,5 +1,6 @@
 import { WEEKDAYS, formatDisplay, buildRange } from './date-utils.js';
 import { slotLabel, slotStart } from './slot-utils.js';
+import { vehicleText } from './booking-utils.js';
 
 export const MAX_PER_DAY = 6;
 const TONES = ['blue', 'lavender', 'green', 'peach', 'pink'];
@@ -61,9 +62,9 @@ export function renderCalendar(root, { start, today, bookings }, handlers) {
           h('div', { class: 'cal-events' },
             shown.map((b) => h('button', {
               class: `evt tone-${toneFor(b.eventName)}`, type: 'button',
-              title: `${b.eventName}${b.timeSlot ? ` — ${slotLabel(b.timeSlot)}` : ''}${b.truckType ? ` — ${b.truckType} × ${b.truckCount}` : ''}${b.attachments?.length ? ` — ${b.attachments.length} attachment(s)` : ''}`,
+              title: `${b.eventName}${b.timeSlot ? ` — ${slotLabel(b.timeSlot)}` : ''}${vehicleText(b) ? ` — ${b.truckCount} × ${vehicleText(b)}` : ''}${b.plateNumber ? ` — ${b.plateNumber}` : ''}${b.attachments?.length ? ` — ${b.attachments.length} attachment(s)` : ''}`,
               onclick: () => handlers.onBooking(b)
-            }, b.timeSlot ? h('span', { class: 'evt-time' }, `${slotStart(b.timeSlot)} `) : null, b.eventName, b.truckType ? h('span', { class: 'evt-truck' }, ` ${b.truckCount}×${b.truckType}`) : null)),
+            }, b.timeSlot ? h('span', { class: 'evt-time' }, `${slotStart(b.timeSlot)} `) : null, b.eventName, vehicleText(b) ? h('span', { class: 'evt-truck' }, ` ${b.truckCount}×${vehicleText(b)}`) : null)),
             extra > 0 ? h('button', {
               class: 'evt-more', type: 'button', onclick: () => handlers.onDay(iso, list)
             }, `+${extra} more booking${extra > 1 ? 's' : ''}`) : null));

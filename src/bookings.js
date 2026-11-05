@@ -4,8 +4,12 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 
-export const TRUCK_TYPES = ['40footer', '20footer', '10ton', '5ton', '3ton', '1ton'];
 export const TRUCK_COUNTS = [1, 2, 3, 4, 5, 6];
+
+// Optional fields: leave them out when empty (create), or delete them from the document (update).
+const isEmpty = (v) => v === undefined || v === null || v === '';
+const present = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => !isEmpty(v)));
+const clearable = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, isEmpty(v) ? deleteField() : v]));
 
 const col = () => collection(db, 'bookings');
 const attCol = (bookingId) => collection(db, 'bookings', bookingId, 'attachments');
@@ -54,8 +58,9 @@ export function createBooking(user, fields, files = []) {
   const batch = writeBatch(db);
   batch.set(ref, {
     bookingDate: fields.bookingDate, eventName: fields.eventName, notes: fields.notes || '',
-    truckType: fields.truckType, truckCount: fields.truckCount, attachments: files.map(meta),
-    ...(fields.timeSlot ? { timeSlot: fields.timeSlot } : {}),
+    truckCount: fields.truckCount, attachments: files.map(meta),
+    ...present({ vehicleType: fields.vehicleType, truckType: fields.truckType, palletized: fields.palletized,
+      plateNumber: fields.plateNumber, timeSlot: fields.timeSlot }),
     createdBy: user.uid, createdByName: user.displayName, createdAt: serverTimestamp(),
     updatedBy: user.uid, updatedByName: user.displayName, updatedAt: serverTimestamp()
   });
@@ -76,8 +81,9 @@ export function updateBooking(user, id, expectedUpdatedMs, fields, { add = [], r
     const kept = (cur.attachments || []).filter((a) => !remove.includes(a.id));
     tx.update(ref, {
       bookingDate: fields.bookingDate, eventName: fields.eventName, notes: fields.notes || '',
-      truckType: fields.truckType, truckCount: fields.truckCount,
-      timeSlot: fields.timeSlot || deleteField(),
+      truckCount: fields.truckCount,
+      ...clearable({ vehicleType: fields.vehicleType, truckType: fields.truckType, palletized: fields.palletized,
+        plateNumber: fields.plateNumber, timeSlot: fields.timeSlot }),
       attachments: [...kept, ...add.map(meta)],
       updatedBy: user.uid, updatedByName: user.displayName, updatedAt: serverTimestamp()
     });

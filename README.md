@@ -14,7 +14,7 @@ A shared, multi-company **lorry booking calendar**. Each company logs in, picks 
 
 | Who | Can do |
 |---|---|
-| **Company (standard user)** | Log in with a username + password. Add a booking: pick **one date**, a **time slot** (when the admin has set any), **type of truck**, **number of trucks (1-6)**, optional notes and up to 5 attachments. The company name is **fixed to their own** (not selectable). View every company's bookings on the calendar and table. Edit/delete **only their own** bookings. Change their own password. |
+| **Company (standard user)** | Log in with a username + password. Add a booking: pick **one date**, a **time slot** (when the admin has set any), **type of vehicle** (Van or Truck; **type of truck** only appears, and is required, when Truck is chosen), **number of vehicles (1-6)**, whether the cargo is **palletized**, an optional **plate number**, optional notes and up to 5 attachments. The company name is **fixed to their own** (not selectable). View every company's bookings on the calendar and table. Edit/delete **only their own** bookings. Change their own password. |
 | **Administrator** | Everything above, plus: edit/delete **any** booking; book **on behalf of any company** (Company dropdown); open **Users** to add, rename, suspend and delete companies; open **Time slots** to set the arrival times companies can choose (e.g. morning only); open **Retention** to set the (off-by-default) auto-delete policy. |
 
 Screen layout: header (today, calendar range, legend, user menu); **left** = booking table (search, sort, Upcoming / History tabs, Add Booking); **right** = 31-day calendar (Mon-Sun columns, Prev / Today / Next).
@@ -98,6 +98,7 @@ src/users.js                User profiles, username mapping, edit/delete user
 src/retention.js            Retention settings read/write
 src/slots.js                Time-slot settings (live listener + admin save)
 src/slot-utils.js           Pure slot helpers (build/clean/generate/format), unit-tested
+src/booking-utils.js        Pure vehicle-field helpers (van/truck, palletized, plate), unit-tested
 src/firebase.js             Firebase init from env vars (+ second auth instance)
 src/api.js                  Facade the UI calls (real Firebase, or demo)
 src/demo.js                 In-memory fake backend for layout checks (demo mode only)
@@ -121,7 +122,7 @@ vite.config.js              base path = /Dynamic-Booking-Calendar/ (GitHub Pages
 |---|---|---|
 | `users` | Firebase Auth UID | `displayName` (= **company name**), `username`, `email` (auth email), `role` (`admin`/`user`), `status` (`active`/`pending`/`suspended`), `createdAt`, `updatedAt` |
 | `usernames` | the username (lowercase) | `email` (the auth email to sign in with), `uid`. Readable **one document at a time by anyone** (needed before login); listing is blocked. |
-| `bookings` | auto ID | `bookingDate` (`YYYY-MM-DD`), `eventName` (= **company name**), `truckType`, `truckCount` (1-6), `timeSlot` (optional, `"08:00-10:00"`), `notes`, `attachments` (list of `{id,name,type,size}`), `createdBy`, `createdByName`, `createdAt`, `updatedBy`, `updatedByName`, `updatedAt` |
+| `bookings` | auto ID | `bookingDate` (`YYYY-MM-DD`), `eventName` (= **company name**), `vehicleType` (`Van`/`Truck`; absent on bookings made before it existed, which count as Truck), `truckType` (only for trucks), `truckCount` (1-6), `palletized` (true/false; absent on old bookings), `plateNumber` (optional text, several allowed), `timeSlot` (optional, `"08:00-10:00"`), `notes`, `attachments` (list of `{id,name,type,size}`), `createdBy`, `createdByName`, `createdAt`, `updatedBy`, `updatedByName`, `updatedAt` |
 | `bookings/{id}/attachments` | random ID | `name`, `type`, `size`, `data` (base64 file), `createdBy`, `createdAt` |
 | `settings` | `retention` | `autoDeleteEnabled` (false by default), `retentionDays`, `updatedAt`, `updatedBy` |
 | `settings` | `slots` | `slots` (list of `"HH:MM-HH:MM"` 24-hour text, max 24), `updatedAt`, `updatedBy`. Empty/missing = no time slots, bookings only have a date. |
@@ -244,7 +245,7 @@ Notes for Windows: run npm from **PowerShell or CMD**. In Git Bash `npm run ...`
 
 | Area | Status |
 |---|---|
-| Date logic (Malaysia time, 31-day range, weekday alignment, midnight roll, leap years) and time-slot helpers | **Automated, passing** (`npm test`, 17 tests; also runs in CI). |
+| Date logic (Malaysia time, 31-day range, weekday alignment, midnight roll, leap years) and time-slot and vehicle-field helpers | **Automated, passing** (`npm test`, 22 tests; also runs in CI). |
 | Production build and GitHub Pages deployment | **Working** (deployed and loading). |
 | Layout, calendar, overflow, dropdowns, details pop-up | Checked in browser (demo data and live as admin). |
 | Firestore rules tests (`tests/rules.test.js`) | **Written but never run**: they need the Firebase emulator, which needs **Java** (not installed on the dev PC). Run with `npm run test:rules` after installing Java 11+. Rules are published and in use; treat them as untested by automation. |
@@ -296,3 +297,4 @@ Runs on Firebase **Spark (free)**: quotas, not unlimited. Free daily limits are 
 5. Calendar shortened to **31 days**; table date filters removed (use the calendar to navigate).
 6. "Name" renamed to **Company**; company auto-filled on bookings (fixed for standard users); click-a-company details pop-up; admin edit/delete companies.
 7. **Time slots**: admin defines allowed arrival times (`settings/slots`); bookings pick one (`timeSlot`). Rules must be re-published (7.5).
+8. **Vehicle details**: type of vehicle (Van/Truck; truck type only for trucks), cargo palletized yes/no, optional plate number. `truckType` is no longer required by the rules (vans have none). Rules must be re-published **before** deploying the code (7.5).

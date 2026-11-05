@@ -1,6 +1,7 @@
 import { api, DEMO, CONFIGURED } from './api.js';
 import { renderCalendar, h } from './calendar.js';
 import { prepareFile, base64ToBlobUrl, formatSize, MAX_FILES } from './attachments.js';
+import { vehicleOf, vehicleText, palletText, vehicleFields, vehicleProblem } from './booking-utils.js';
 import { slotLabel, slotStart, makeSlot, cleanSlots, generateSlots, MAX_SLOTS } from './slot-utils.js';
 import {
   todayISO, addDays, buildRange, formatDisplay, isValidISO, watchToday, weekdayName, RANGE_DAYS
@@ -191,7 +192,9 @@ function drawCalendar() {
 
 const bookingInfo = (b) => [
   b.timeSlot ? `🕘 ${slotLabel(b.timeSlot)}` : null,
-  b.truckType ? `${b.truckType} × ${b.truckCount}` : null,
+  vehicleText(b) ? `${vehicleText(b)} × ${b.truckCount}` : null,
+  palletText(b) || null,
+  b.plateNumber ? `🚚 ${b.plateNumber}` : null,
   b.attachments?.length ? `📎 ${b.attachments.length}` : null
 ].filter(Boolean).join(' · ');
 
@@ -263,8 +266,14 @@ function openView(b) {
   $('v-company').textContent = b.eventName;
   $('v-date').textContent = `${weekdayName(b.bookingDate)}, ${formatDisplay(b.bookingDate)}`;
   $('v-slot').textContent = b.timeSlot ? slotLabel(b.timeSlot) : '—';
+  const vehicle = vehicleOf(b);
+  $('v-vehicle').textContent = vehicle || '—';
+  $('v-truck-dt').hidden = $('v-truck').hidden = vehicle !== 'Truck';
   $('v-truck').textContent = b.truckType || '—';
-  $('v-count').textContent = b.truckCount ? `${b.truckCount} ${b.truckCount === 1 ? 'lorry' : 'lorries'}` : '—';
+  const unit = vehicle === 'Van' ? ['van', 'vans'] : ['lorry', 'lorries'];
+  $('v-count').textContent = b.truckCount ? `${b.truckCount} ${b.truckCount === 1 ? unit[0] : unit[1]}` : '—';
+  $('v-pallet').textContent = palletText(b) || '—';
+  $('v-plate').textContent = b.plateNumber || '—';
   $('v-notes').textContent = b.notes || '—';
   const files = b.attachments || [];
   $('v-att').replaceChildren(...(files.length ? files.map((a) => {
@@ -292,12 +301,16 @@ function openBookingDialog(b, presetDate) {
   fillCompany(editing ? b.eventName : null);
   fillSlot(editing ? b.timeSlot : null);
   $('b-notes').value = editing ? (b.notes || '') : '';
+  $('b-vehicle').value = editing ? vehicleOf(b) : '';
   $('b-truck').value = editing ? (b.truckType || '') : '';
+  $('b-truck-label').hidden = $('b-vehicle').value !== 'Truck';
   $('b-count').value = editing && b.truckCount ? String(b.truckCount) : '';
+  $('b-pallet').value = editing && typeof b.palletized === 'boolean' ? (b.palletized ? 'yes' : 'no') : '';
+  $('b-plate').value = editing ? (b.plateNumber || '') : '';
   state.files = { bookingId: editing ? b.id : null, existing: editing ? [...(b.attachments || [])] : [], remove: [], add: [] };
   $('b-files').value = '';
   const ro = editing && !canEdit(b);
-  ['b-date', 'b-slot', 'b-company', 'b-notes', 'b-truck', 'b-count', 'b-files'].forEach((id) => { $(id).disabled = ro; });
+  ['b-date', 'b-slot', 'b-company', 'b-notes', 'b-vehicle', 'b-truck', 'b-count', 'b-pallet', 'b-plate', 'b-files'].forEach((id) => { $(id).disabled = ro; });
   // Standard users: company is fixed to their own and shown as plain text, not a choice.
   $('b-company').hidden = !isAdmin();
   $('b-company-fixed').hidden = isAdmin();
@@ -372,16 +385,21 @@ async function addPickedFiles(fileList) {
 async function saveBooking(e) {
   e.preventDefault();
   const err = $('b-error');
+  const raw = {
+    vehicleType: $('b-vehicle').value, truckType: $('b-truck').value, truckCount: Number($('b-count').value),
+    palletized: $('b-pallet').value, plateNumber: $('b-plate').value
+  };
   const f = {
     bookingDate: $('b-date').value, eventName: $('b-company').value, notes: $('b-notes').value.trim(),
-    truckType: $('b-truck').value, truckCount: Number($('b-count').value),
+    truckCount: raw.truckCount, ...vehicleFields(raw),
     timeSlot: $('b-slot-label').hidden ? '' : $('b-slot').value
   };
-  if (!isValidISO(f.bookingDate)) { err.textContent = 'Choose a valid date.'; err.hidden = false; return; }
-  if (state.slots.length && !f.timeSlot) { err.textContent = 'Choose a time slot.'; err.hidden = false; return; }
-  if (!f.eventName) { err.textContent = 'Choose the company.'; err.hidden = false; return; }
-  if (!f.truckType) { err.textContent = 'Choose the type of truck.'; err.hidden = false; return; }
-  if (!(f.truckCount >= 1 && f.truckCount <= 6)) { err.textContent = 'Choose the number of trucks (1-6).'; err.hidden = false; return; }
+  const fail = (m) => { err.textContent = m; err.hidden = false; };
+  if (!isValidISO(f.bookingDate)) return fail('Choose a valid date.');
+  if (state.slots.length && !f.timeSlot) return fail('Choose a time slot.');
+  if (!f.eventName) return fail('Choose the company.');
+  const problem = vehicleProblem(raw);
+  if (problem) return fail(problem);
   const btn = $('b-save'); btn.disabled = true; btn.textContent = 'Saving…'; err.hidden = true;
   try {
     const { add, remove } = state.files;
@@ -513,6 +531,12 @@ function wire() {
   $('eu-cancel').onclick = () => $('dlg-edituser').close();
   $('b-files').onchange = (e) => addPickedFiles([...e.target.files]);
   $('form-booking').onsubmit = saveBooking;
+  // "Type of truck" only applies to trucks; choosing Van hides it and forgets the choice.
+  $('b-vehicle').onchange = () => {
+    const truck = $('b-vehicle').value === 'Truck';
+    $('b-truck-label').hidden = !truck;
+    if (!truck) $('b-truck').value = '';
+  };
   $('btn-logout').onclick = () => api.logout();
   $('btn-password').onclick = () => { $('form-password').reset(); $('pw-error').hidden = true; $('dlg-password').showModal(); };
   $('pw-cancel').onclick = () => $('dlg-password').close();

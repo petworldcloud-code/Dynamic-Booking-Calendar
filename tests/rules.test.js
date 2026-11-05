@@ -137,6 +137,27 @@ describe('settings', () => {
   });
 });
 
+describe('booking vehicle fields', () => {
+  const noTruck = (uid, over = {}) => { const b = booking(uid, over); delete b.truckType; return b; };
+  it('accepts a truck with palletized and plate number', async () => {
+    await assertSucceeds(setDoc(doc(ctx('bob'), 'bookings', 'v1'),
+      booking('bob', { vehicleType: 'Truck', palletized: true, plateNumber: 'WXY 1234' })));
+  });
+  it('accepts a van without a truck type, rejects a van with one', async () => {
+    await assertSucceeds(setDoc(doc(ctx('bob'), 'bookings', 'v2'), noTruck('bob', { vehicleType: 'Van', palletized: false })));
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'v3'), booking('bob', { vehicleType: 'Van' })));
+  });
+  it('requires a truck type for a truck', async () => {
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'v4'), noTruck('bob', { vehicleType: 'Truck' })));
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'v5'), noTruck('bob')));
+  });
+  it('rejects an unknown vehicle, non-boolean palletized and an over-long plate', async () => {
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'v6'), booking('bob', { vehicleType: 'Bike' })));
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'v7'), booking('bob', { palletized: 'yes' })));
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'v8'), booking('bob', { plateNumber: 'X'.repeat(101) })));
+  });
+});
+
 describe('booking time slot', () => {
   it('accepts a well-formed slot and none at all', async () => {
     await assertSucceeds(setDoc(doc(ctx('bob'), 'bookings', 't1'), booking('bob', { timeSlot: '08:00-10:00' })));
