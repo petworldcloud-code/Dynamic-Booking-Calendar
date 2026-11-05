@@ -59,7 +59,7 @@ export function createBooking(user, fields, files = []) {
   batch.set(ref, {
     bookingDate: fields.bookingDate, eventName: fields.eventName, notes: fields.notes || '',
     truckCount: fields.truckCount, attachments: files.map(meta),
-    ...present({ vehicleType: fields.vehicleType, truckType: fields.truckType, palletized: fields.palletized,
+    ...present({ deliveryType: fields.deliveryType, vehicleType: fields.vehicleType, truckType: fields.truckType, palletized: fields.palletized,
       plateNumber: fields.plateNumber, timeSlot: fields.timeSlot }),
     createdBy: user.uid, createdByName: user.displayName, createdAt: serverTimestamp(),
     updatedBy: user.uid, updatedByName: user.displayName, updatedAt: serverTimestamp()
@@ -82,7 +82,7 @@ export function updateBooking(user, id, expectedUpdatedMs, fields, { add = [], r
     tx.update(ref, {
       bookingDate: fields.bookingDate, eventName: fields.eventName, notes: fields.notes || '',
       truckCount: fields.truckCount,
-      ...clearable({ vehicleType: fields.vehicleType, truckType: fields.truckType, palletized: fields.palletized,
+      ...clearable({ deliveryType: fields.deliveryType, vehicleType: fields.vehicleType, truckType: fields.truckType, palletized: fields.palletized,
         plateNumber: fields.plateNumber, timeSlot: fields.timeSlot }),
       attachments: [...kept, ...add.map(meta)],
       updatedBy: user.uid, updatedByName: user.displayName, updatedAt: serverTimestamp()

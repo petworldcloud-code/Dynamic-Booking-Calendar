@@ -28,8 +28,10 @@ describe('booking-utils', () => {
   });
 
   it('validates the fields', () => {
-    const ok = { vehicleType: 'Truck', truckType: '5ton', truckCount: 2, palletized: 'yes', plateNumber: '' };
+    const ok = { deliveryType: 'Unloading', vehicleType: 'Truck', truckType: '5ton', truckCount: 2, palletized: 'yes', plateNumber: '' };
     expect(vehicleProblem(ok)).toBe('');
+    expect(vehicleProblem({ ...ok, deliveryType: '' })).toMatch(/delivery/);
+    expect(vehicleProblem({ ...ok, deliveryType: 'Pickup' })).toMatch(/delivery/);
     expect(vehicleProblem({ ...ok, vehicleType: '' })).toMatch(/vehicle/);
     expect(vehicleProblem({ ...ok, truckType: '' })).toMatch(/type of truck/);
     expect(vehicleProblem({ ...ok, vehicleType: 'Van', truckType: '' })).toBe('');

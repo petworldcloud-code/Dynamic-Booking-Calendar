@@ -199,6 +199,7 @@ function drawCalendar() {
 
 const bookingInfo = (b) => [
   b.timeSlot ? `🕘 ${slotLabel(b.timeSlot)}` : null,
+  b.deliveryType || null,
   vehicleText(b) ? `${vehicleText(b)} × ${b.truckCount}` : null,
   palletText(b) || null,
   b.plateNumber ? `🚚 ${b.plateNumber}` : null,
@@ -278,6 +279,7 @@ function openView(b) {
   $('v-date').textContent = `${weekdayName(b.bookingDate)}, ${formatDisplay(b.bookingDate)}`;
   $('v-slot').textContent = b.timeSlot ? slotLabel(b.timeSlot) : '—';
   const vehicle = vehicleOf(b);
+  $('v-delivery').textContent = b.deliveryType || '—';
   $('v-vehicle').textContent = vehicle || '—';
   $('v-truck-dt').hidden = $('v-truck').hidden = vehicle !== 'Truck';
   $('v-truck').textContent = b.truckType || '—';
@@ -312,6 +314,7 @@ function openBookingDialog(b, presetDate) {
   fillCompany(editing ? b.eventName : null);
   fillSlot(editing ? b.timeSlot : null);
   $('b-notes').value = editing ? (b.notes || '') : '';
+  $('b-delivery').value = editing ? (b.deliveryType || '') : '';
   $('b-vehicle').value = editing ? vehicleOf(b) : '';
   $('b-truck').value = editing ? (b.truckType || '') : '';
   $('b-truck-label').hidden = $('b-vehicle').value !== 'Truck';
@@ -321,7 +324,7 @@ function openBookingDialog(b, presetDate) {
   state.files = { bookingId: editing ? b.id : null, existing: editing ? [...(b.attachments || [])] : [], remove: [], add: [] };
   $('b-files').value = '';
   const ro = editing && !canEdit(b);
-  ['b-date', 'b-slot', 'b-company', 'b-notes', 'b-vehicle', 'b-truck', 'b-count', 'b-pallet', 'b-plate', 'b-files'].forEach((id) => { $(id).disabled = ro; });
+  ['b-date', 'b-slot', 'b-company', 'b-notes', 'b-delivery', 'b-vehicle', 'b-truck', 'b-count', 'b-pallet', 'b-plate', 'b-files'].forEach((id) => { $(id).disabled = ro; });
   // Standard users: company is fixed to their own and shown as plain text, not a choice.
   $('b-company').hidden = !isAdmin();
   $('b-company-fixed').hidden = isAdmin();
@@ -397,7 +400,7 @@ async function saveBooking(e) {
   e.preventDefault();
   const err = $('b-error');
   const raw = {
-    vehicleType: $('b-vehicle').value, truckType: $('b-truck').value, truckCount: Number($('b-count').value),
+    deliveryType: $('b-delivery').value, vehicleType: $('b-vehicle').value, truckType: $('b-truck').value, truckCount: Number($('b-count').value),
     palletized: $('b-pallet').value, plateNumber: $('b-plate').value
   };
   const f = {

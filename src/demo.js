@@ -19,6 +19,7 @@ function mk(dayOffset, eventName, n = 0) {
   return {
     id: `d${String(seq).padStart(3, '0')}`, bookingDate: addDays(todayISO(), dayOffset), eventName, notes: '',
     ...(seq % 5 === 0 ? { vehicleType: 'Van' } : { vehicleType: 'Truck', truckType: ['40footer', '20footer', '10ton', '5ton', '3ton', '1ton'][seq % 6] }),
+    deliveryType: ['Delivery stock', 'Container pull', 'Unloading'][seq % 3],
     truckCount: (seq % 6) + 1, palletized: seq % 2 === 0, ...(seq % 3 === 0 ? { plateNumber: `WXY ${1000 + seq}` } : {}), attachments: [],
     timeSlot: ['08:00-09:00', '09:00-10:00', '10:00-11:00', '11:00-12:00'][seq % 4],
     createdBy: me.uid, createdByName: me.displayName, updatedBy: me.uid, updatedByName: me.displayName,
@@ -54,7 +55,7 @@ export const api = {
     const r = rows.find((x) => x.id === id);
     if (!r) throw Object.assign(new Error('This booking no longer exists.'), { code: 'gone' });
     if (r.updatedAt.toMillis() !== expected) throw Object.assign(new Error('Someone else changed this booking.'), { code: 'conflict' });
-    for (const k of ['truckType', 'plateNumber', 'timeSlot']) delete r[k]; // optional fields cleared when empty, as in Firestore
+    for (const k of ['truckType', 'plateNumber', 'timeSlot', 'deliveryType']) delete r[k]; // optional fields cleared when empty, as in Firestore
     seq += 1; Object.assign(r, f, { updatedAt: { toMillis: () => 5000 + seq } }); notify();
   },
   async deleteBooking(b) { rows = rows.filter((r) => r.id !== b.id); notify(); },

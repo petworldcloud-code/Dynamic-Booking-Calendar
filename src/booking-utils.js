@@ -1,6 +1,7 @@
 // Pure helpers for the vehicle fields of a booking (no Firebase, so they are unit-testable).
 export const VEHICLE_TYPES = ['Van', 'Truck'];
 export const TRUCK_TYPES = ['40footer', '20footer', '10ton', '5ton', '3ton', '1ton'];
+export const DELIVERY_TYPES = ['Delivery stock', 'Container pull', 'Unloading'];
 export const PALLET_OPTIONS = [{ value: 'yes', label: 'Palletized' }, { value: 'no', label: 'Not palletized' }];
 
 /** 'Van' or 'Truck'. Bookings made before vehicle type existed have a truck type, so they count as Truck. */
@@ -16,6 +17,7 @@ export const palletText = (b) => (b.palletized === true ? 'Palletized' : b.palle
 export function vehicleFields(f) {
   const van = f.vehicleType === 'Van';
   return {
+    deliveryType: f.deliveryType,
     vehicleType: f.vehicleType,
     truckType: van ? undefined : f.truckType,
     palletized: f.palletized === 'yes' ? true : false,
@@ -25,6 +27,7 @@ export function vehicleFields(f) {
 
 /** Returns an error message, or '' when the vehicle fields are valid. */
 export function vehicleProblem(f) {
+  if (!DELIVERY_TYPES.includes(f.deliveryType)) return 'Choose the type of delivery.';
   if (!VEHICLE_TYPES.includes(f.vehicleType)) return 'Choose the type of vehicle (Van or Truck).';
   if (f.vehicleType === 'Truck' && !TRUCK_TYPES.includes(f.truckType)) return 'Choose the type of truck.';
   if (!(f.truckCount >= 1 && f.truckCount <= 6)) return 'Choose the number of vehicles (1-6).';

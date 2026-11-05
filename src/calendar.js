@@ -64,7 +64,7 @@ export function renderCalendar(root, { start, today, bookings, blocked = new Map
           h('div', { class: 'cal-events' },
             shown.map((b) => h('button', {
               class: `evt tone-${toneFor(b.eventName)}`, type: 'button',
-              title: `${b.eventName}${b.timeSlot ? ` — ${slotLabel(b.timeSlot)}` : ''}${vehicleText(b) ? ` — ${b.truckCount} × ${vehicleText(b)}` : ''}${b.plateNumber ? ` — ${b.plateNumber}` : ''}${b.attachments?.length ? ` — ${b.attachments.length} attachment(s)` : ''}`,
+              title: `${b.eventName}${b.timeSlot ? ` — ${slotLabel(b.timeSlot)}` : ''}${b.deliveryType ? ` — ${b.deliveryType}` : ''}${vehicleText(b) ? ` — ${b.truckCount} × ${vehicleText(b)}` : ''}${b.plateNumber ? ` — ${b.plateNumber}` : ''}${b.attachments?.length ? ` — ${b.attachments.length} attachment(s)` : ''}`,
               onclick: () => handlers.onBooking(b)
             }, b.timeSlot ? h('span', { class: 'evt-time' }, `${slotStart(b.timeSlot)} `) : null, b.eventName, vehicleText(b) ? h('span', { class: 'evt-truck' }, ` ${b.truckCount}×${vehicleText(b)}`) : null)),
             extra > 0 ? h('button', {

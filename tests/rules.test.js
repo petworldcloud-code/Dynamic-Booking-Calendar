@@ -137,6 +137,16 @@ describe('settings', () => {
   });
 });
 
+describe('booking delivery type', () => {
+  it('accepts the three delivery types and none, rejects others', async () => {
+    for (const [i, t] of ['Delivery stock', 'Container pull', 'Unloading'].entries()) {
+      await assertSucceeds(setDoc(doc(ctx('bob'), 'bookings', 'dt' + i), booking('bob', { deliveryType: t })));
+    }
+    await assertSucceeds(setDoc(doc(ctx('bob'), 'bookings', 'dt9'), booking('bob')));
+    await assertFails(setDoc(doc(ctx('bob'), 'bookings', 'dt8'), booking('bob', { deliveryType: 'Pickup' })));
+  });
+});
+
 describe('booking vehicle fields', () => {
   const noTruck = (uid, over = {}) => { const b = booking(uid, over); delete b.truckType; return b; };
   it('accepts a truck with palletized and plate number', async () => {
