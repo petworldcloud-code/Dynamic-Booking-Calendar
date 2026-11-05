@@ -103,6 +103,12 @@ function mailBody(heading, b) {
     '<p style="margin-top:14px"><a href="' + APP_URL + '">Open the booking calendar</a></p></div>';
 }
 
+/** Plain-text twin of the HTML mail (sent as the alternative body; some spam filters prefer mail that has one). */
+function mailText(heading, b) {
+  var lines = detailRows(b).map(function (r) { return r[0] + ': ' + r[1]; });
+  return heading + '\n\n' + lines.join('\n') + '\n\nOpen the booking calendar: ' + APP_URL + '\n';
+}
+
 function subjectFor(kind, b) {
   var when = b.bookingDate + (b.timeSlot ? ' ' + slotText(b.timeSlot) : '');
   if (kind === 'new') return 'New booking: ' + b.eventName + ' - ' + when;
@@ -191,6 +197,7 @@ function sendOnce(kind, b, recipients, settings) {
     to: Session.getEffectiveUser().getEmail(), // the owner's address; everybody else is in Bcc so addresses stay private
     bcc: to.join(','),
     subject: subjectFor(kind, b),
+    body: mailText(headingFor(kind), b),
     htmlBody: mailBody(headingFor(kind), b),
     name: SENDER_NAME
   });
@@ -276,13 +283,15 @@ function setup() {
 
 /** Optional: sends a test mail to the owner to confirm Gmail sending works. */
 function sendTest() {
+  var sample = {
+    eventName: 'Sample Company', bookingDate: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'),
+    timeSlot: '08:00-10:00', deliveryType: 'Delivery stock', vehicleType: 'Truck', truckType: '10ton', truckCount: 1, palletized: true
+  };
   MailApp.sendEmail({
     to: Session.getEffectiveUser().getEmail(),
     subject: 'Booking calendar: test email',
-    htmlBody: mailBody('Test email', {
-      eventName: 'Sample Company', bookingDate: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'),
-      timeSlot: '08:00-10:00', deliveryType: 'Delivery stock', vehicleType: 'Truck', truckType: '10ton', truckCount: 1, palletized: true
-    }),
+    body: mailText('Test email', sample),
+    htmlBody: mailBody('Test email', sample),
     name: SENDER_NAME
   });
 }

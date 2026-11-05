@@ -39,7 +39,7 @@ describe('notify-utils', () => {
 
 // Load the pure helpers of the Apps Script file without running any Google services.
 const gs = readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'utf8');
-const lib = new Function(`${gs}; return { slotStartMs, hourOnMs, recipientsFor, fromDoc, logKey, subjectFor, mailBody };`)();
+const lib = new Function(`${gs}; return { slotStartMs, hourOnMs, recipientsFor, fromDoc, logKey, subjectFor, mailBody, mailText };`)();
 
 describe('apps-script/Code.gs helpers', () => {
   it('computes slot start in Malaysia time', () => {
@@ -73,5 +73,9 @@ describe('apps-script/Code.gs helpers', () => {
     expect(lib.logKey('new', { ...b, timeSlot: undefined })).toBe('new_abc_2026-11-12_noslot');
     expect(lib.subjectFor('two', b)).toMatch(/in 2 hours/);
     expect(lib.mailBody('Hi', b)).toContain('&lt;b&gt;X&lt;/b&gt;');
+    const txt = lib.mailText('Hi', b);
+    expect(txt).toContain('Company: <b>X</b>');
+    expect(txt).toContain('Time slot: 08:00 – 10:00');
+    expect(txt).not.toMatch(/<table|&lt;/);
   });
 });
