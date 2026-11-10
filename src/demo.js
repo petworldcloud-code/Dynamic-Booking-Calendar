@@ -44,7 +44,8 @@ const slotSubs = new Set();
 const blocked = new Map([[addDays(todayISO(), 5), 'Public holiday'], [addDays(todayISO(), 6), 'Public holiday']]);
 const blockedSubs = new Set();
 const recipSubs = new Set();
-const recipients = new Map([['ops@example.com', { email: 'ops@example.com', allCompanies: true, companies: [] }]]);
+const recipientsBy = { dim: new Map([['ops@example.com', { email: 'ops@example.com', allCompanies: true, companies: [] }]]) };
+const recipientsOf = () => (recipientsBy[currentCal || 'dim'] ||= new Map()); // each calendar has its own list
 let notifySettings = { ...DEFAULT_NOTIFY };
 
 const names = ['Tefal', 'Sony', '3M', 'GOON', 'Nestle', 'Unilever', 'Coca Cola', 'Watsons', 'Dove', 'Pepsi', 'Samsung', 'Lenovo'];
@@ -153,19 +154,22 @@ export const api = {
     blockedSubs.add(run); run();
     return () => blockedSubs.delete(run);
   },
-  async blockDates(uid, dates, reason) { dates.forEach((d) => blocked.set(d, reason)); blockedSubs.forEach((f) => f()); },
+  async blockDates(uid, dates, reason, all) {
+    dates.forEach((d) => blocked.set(d, reason)); blockedSubs.forEach((f) => f());
+    globalThis.__demoBlockedAll = all; // lets a browser check see what was asked for
+  },
   async unblockDate(d) { blocked.delete(d); blockedSubs.forEach((f) => f()); },
   watchRecipients(cb) {
-    const run = () => cb([...recipients.values()].sort((a, b) => a.email.localeCompare(b.email)));
+    const run = () => cb([...recipientsOf().values()].sort((a, b) => a.email.localeCompare(b.email)));
     recipSubs.add(run); run();
     return () => recipSubs.delete(run);
   },
   async saveRecipient(uid, form, count, isNew) {
     const r = cleanRecipient(form);
     if (isNew && count >= MAX_RECIPIENTS) throw new Error(`At most ${MAX_RECIPIENTS} email addresses.`);
-    recipients.set(r.email, r); recipSubs.forEach((f) => f());
+    recipientsOf().set(r.email, r); recipSubs.forEach((f) => f());
   },
-  async removeRecipient(email) { recipients.delete(email); recipSubs.forEach((f) => f()); },
+  async removeRecipient(email) { recipientsOf().delete(email); recipSubs.forEach((f) => f()); },
   watchNotifySettings(cb) { cb({ ...notifySettings }); return () => {}; },
   async saveNotifySettings(uid, s) { notifySettings = cleanNotifySettings(s); }
 };

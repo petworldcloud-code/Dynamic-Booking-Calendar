@@ -78,4 +78,21 @@ describe('apps-script/Code.gs helpers', () => {
     expect(txt).toContain('Time slot: 08:00 – 10:00');
     expect(txt).not.toMatch(/<table|&lt;/);
   });
+
+  it("matches a calendar's recipients by company id (or name for the old calendar)", () => {
+    const list = [
+      { email: 'all@x.co', allCompanies: true, companies: [] },
+      { email: 'tg@x.co', allCompanies: false, companies: ['shell'] },
+      { email: 'old@x.co', allCompanies: false, companies: ['Shell'] }
+    ];
+    expect(recipientsFor(list, 'Shell', 'shell')).toEqual(['all@x.co', 'tg@x.co', 'old@x.co']);
+    expect(recipientsFor(list, 'Petronas', 'petronas')).toEqual(['all@x.co']);
+    expect(wantsCompany(list[1], 'Shell')).toBe(false); // an id tick needs the booking's companyId
+  });
+
+  it('shows ticked companies by name', () => {
+    const names = { shell: 'Shell', tg: 'TG Logistics' };
+    expect(scopeText({ allCompanies: false, companies: ['shell', 'tg'] }, (id) => names[id])).toBe('Shell, TG Logistics');
+    expect(scopeText({ allCompanies: true })).toBe('All companies');
+  });
 });

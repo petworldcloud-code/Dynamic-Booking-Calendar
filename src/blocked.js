@@ -1,4 +1,4 @@
-import { doc, onSnapshot, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { calCollection } from './calendars.js';
 
@@ -10,10 +10,15 @@ export function watchBlocked(cb, onError) {
   return onSnapshot(col(), (s) => cb(new Map(s.docs.map((d) => [d.id, d.data().reason || '']))), onError);
 }
 
-export function blockDates(uid, dates, reason) {
-  const batch = writeBatch(db);
-  dates.forEach((d) => batch.set(doc(col(), d), { reason, createdBy: uid, createdAt: serverTimestamp() }));
-  return batch.commit();
+/** Close dates on this calendar, or (allCalendars = list of codes) on each of those calendars, e.g. public holidays. */
+export async function blockDates(uid, dates, reason, allCalendars = null) {
+  const cols = allCalendars?.length ? allCalendars.map((c) => collection(db, 'calendars', c, 'blockedDates')) : [col()];
+  const writes = cols.flatMap((c) => dates.map((d) => [doc(c, d), { reason, createdBy: uid, createdAt: serverTimestamp() }]));
+  for (let i = 0; i < writes.length; i += 400) { // a batch holds at most 500 writes
+    const batch = writeBatch(db);
+    writes.slice(i, i + 400).forEach(([ref, data]) => batch.set(ref, data));
+    await batch.commit();
+  }
 }
 
 export function unblockDate(date) {

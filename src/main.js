@@ -255,6 +255,7 @@ function startCalendarData() {
   if (state.multi && state.cal) {
     unCos = api.watchCompanies((list) => {
       state.companyList = list; drawCalendar(); drawTable();
+      if ($('dlg-notify').open) { drawRecipients(); if (!state.editingEmail) drawCompanyBoxes(); }
       if ($('dlg-cos').open) drawCompanyList();
       if (state.dayISO && $('dlg-day').open) drawDay();
     }, () => {});
@@ -770,7 +771,11 @@ function drawBlockedList() {
     }, 'Unblock'))) : [h('li', { class: 'muted' }, 'No blocked dates coming up.')]));
 }
 
-function openBlocked() { blockProblem(''); drawBlockedList(); $('dlg-blocked').showModal(); }
+function openBlocked() {
+  const multi = state.multi && state.calendars.filter((c) => c.active !== false).length > 1;
+  $('bl-title').textContent = state.multi ? `Blocked dates — ${calendarLabel(state.cal)}` : 'Blocked dates';
+  $('bl-all-label').hidden = !multi; $('bl-all').checked = false;
+  blockProblem(''); drawBlockedList(); $('dlg-blocked').showModal(); }
 
 async function addBlocked(e) {
   e.preventDefault();
@@ -778,19 +783,28 @@ async function addBlocked(e) {
   try {
     const dates = dateSpan($('bl-from').value, $('bl-to').value || $('bl-from').value);
     btn.disabled = true; btn.textContent = 'Blocking…';
-    await api.blockDates(state.session.user.uid, dates, $('bl-reason').value.trim());
+    const all = state.multi && $('bl-all').checked ? state.calendars.filter((c) => c.active !== false).map((c) => c.id) : null;
+    await api.blockDates(state.session.user.uid, dates, $('bl-reason').value.trim(), all);
     e.target.reset();
-    toast(`${dates.length} date${dates.length === 1 ? '' : 's'} blocked.`);
+    toast(`${dates.length} date${dates.length === 1 ? '' : 's'} blocked${all ? ` on ${all.length} calendars` : ''}.`);
   } catch (x) { blockProblem(friendly(x)); } finally { btn.disabled = false; btn.textContent = 'Block'; }
 }
 
 // ---------- admin: email alerts ----------
 function notifyProblem(msg) { const e = $('nt-error'); e.textContent = msg; e.hidden = !msg; }
 
+/** Company name for a stored tick: an id in a calendar, a plain name in the old single calendar. */
+const tickName = (t) => (state.multi ? state.companyList.find((c) => c.id === t)?.name || `${t} (removed)` : t);
+
 function drawCompanyBoxes(ticked = []) {
-  const names = [...new Set([...state.companies, ...ticked])].sort((a, b) => a.localeCompare(b));
-  $('nt-companies').replaceChildren(...(names.length ? names.map((n) => h('label', { class: 'check' },
-    h('input', { type: 'checkbox', value: n, checked: ticked.includes(n) }), n)) : [h('span', { class: 'muted' }, 'No companies yet.')]));
+  // [{ value, label }]: this calendar's companies (ids) in a calendar, company account names in the old site.
+  const opts = state.multi
+    ? [...state.companyList.filter((c) => c.active !== false || ticked.includes(c.id)).map((c) => ({ value: c.id, label: c.name })),
+      ...ticked.filter((t) => !state.companyList.some((c) => c.id === t)).map((t) => ({ value: t, label: tickName(t) }))]
+    : [...new Set([...state.companies, ...ticked])].map((n) => ({ value: n, label: n }));
+  opts.sort((a, b) => a.label.localeCompare(b.label));
+  $('nt-companies').replaceChildren(...(opts.length ? opts.map((o) => h('label', { class: 'check' },
+    h('input', { type: 'checkbox', value: o.value, checked: ticked.includes(o.value) }), o.label)) : [h('span', { class: 'muted' }, 'No companies yet.')]));
   $('nt-companies').classList.toggle('off', $('nt-all').checked);
 }
 
@@ -803,7 +817,7 @@ function resetNotifyForm() {
 
 function drawRecipients() {
   const rows = state.recipients.map((r) => h('li', {},
-    h('span', {}, h('strong', {}, r.email), ` — ${scopeText(r)}`),
+    h('span', {}, h('strong', {}, r.email), ` — ${scopeText(r, tickName)}`),
     h('span', { class: 'acts' },
       h('button', { type: 'button', class: 'icon', onclick: () => editRecipient(r) }, 'Edit'),
       h('button', {
@@ -824,6 +838,7 @@ function editRecipient(r) {
 }
 
 function openNotify() {
+  $('nt-title').textContent = state.multi ? `Email alerts — ${calendarLabel(state.cal)}` : 'Email alerts';
   $('nt-hour').replaceChildren(...Array.from({ length: 24 }, (_, i) => h('option', { value: String(i) }, `${String(i).padStart(2, '0')}:00`)));
   const s = state.notify;
   $('nt-new').checked = s.onNew; $('nt-day').checked = s.dayBefore; $('nt-two').checked = s.twoHours; $('nt-hour').value = String(s.dayBeforeHour);

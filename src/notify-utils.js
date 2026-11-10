@@ -21,19 +21,27 @@ export function cleanRecipient({ email, allCompanies, companies }) {
   return { email: e, allCompanies: false, companies: list };
 }
 
-/** Does this recipient get mail about a booking for this company (booking.eventName)? */
-export function wantsCompany(recipient, company) {
-  return !!recipient.allCompanies || (recipient.companies || []).includes(company);
+/**
+ * Does this recipient get mail about a booking for this company?
+ * In a calendar the ticks are company ids, so a booking matches by its companyId; the old single
+ * calendar ticks company names, matched against booking.eventName.
+ */
+export function wantsCompany(recipient, company, companyId) {
+  if (recipient.allCompanies) return true;
+  const ticked = recipient.companies || [];
+  return ticked.includes(company) || (!!companyId && ticked.includes(companyId));
 }
 
-export function recipientsFor(list, company) {
-  return list.filter((r) => wantsCompany(r, company)).map((r) => r.email);
+export function recipientsFor(list, company, companyId) {
+  return list.filter((r) => wantsCompany(r, company, companyId)).map((r) => r.email);
 }
 
-export function scopeText(r) {
+/** "All companies", or the ticked ones by name (nameOf turns a stored id into the company's name). */
+export function scopeText(r, nameOf = (x) => x) {
   if (r.allCompanies) return 'All companies';
-  const n = (r.companies || []).length;
-  return n <= 3 ? r.companies.join(', ') : `${r.companies.slice(0, 3).join(', ')} +${n - 3} more`;
+  const names = (r.companies || []).map(nameOf);
+  const n = names.length;
+  return n <= 3 ? names.join(', ') : `${names.slice(0, 3).join(', ')} +${n - 3} more`;
 }
 
 export function cleanNotifySettings(s) {
