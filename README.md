@@ -223,6 +223,14 @@ Nobody becomes admin automatically.
 ### 7.8 Moving to a new Firebase project
 Create the project, register a web app, enable Email/Password, create Firestore (Singapore), publish rules + the index, add the authorized domain `petworldcloud-code.github.io`, update the six GitHub variables (below), re-do 7.7. Existing bookings do not migrate automatically.
 
+### 7.9 Moving the old single calendar into calendars/dim (one time)
+Part of the multi-calendar go-live (full order: `docs/MULTI-CALENDAR-PLAN.md`, "Go-live order"). Done in the Apps Script editor (7.3d) after pasting the new `apps-script/Code.gs`:
+1. Publish the transition rules (`firestore.rules`, see 7.5).
+2. Run **migrateDryRun**. Nothing is written; the log shows what would be copied, e.g. `{"calendar":1,"companies":5,"bookings":120,...}`.
+3. Run **migrateToCalendars**. It copies into `calendars/dim`: the company list (from company accounts, booking names and email-alert ticks, each with its own colour), bookings (same ids, times and creators, plus `companyId`) and their attachments, blocked dates, time slots, email settings and recipients (ticks become company ids), and the email log so nothing is mailed twice. Then it **suspends** the old company logins (role `user`); the admin account is not touched. Old data is **not** deleted.
+4. Safe to run again: it copies only what is missing, or bookings changed in the old app since the last run. A booking **deleted** in the old app after a run stays in `calendars/dim`; delete it there.
+5. The same script then sends mail for every active calendar (subject `[TG] New booking: ...`, link opens `#tg`). Before any calendar exists it keeps using the old paths.
+
 ---
 
 ## 8. Setup from scratch (installation)
