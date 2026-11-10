@@ -1,9 +1,9 @@
-import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from './firebase.js';
+import { onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { calDoc } from './calendars.js';
 import { cleanSlots, MAX_SLOTS } from './slot-utils.js';
 
 // settings/slots = { slots: ["08:00-10:00", ...], updatedAt, updatedBy }. Admin writes, every active user reads.
-const ref = () => doc(db, 'settings', 'slots');
+const ref = () => calDoc('settings', 'slots');
 
 /** Live list of the time slots admins allow (empty = no time slots, bookings just have a date). */
 export function watchSlots(cb, onError) {

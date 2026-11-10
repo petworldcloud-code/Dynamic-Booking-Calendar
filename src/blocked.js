@@ -1,8 +1,9 @@
-import { collection, doc, onSnapshot, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase.js';
+import { calCollection } from './calendars.js';
 
 // blockedDates/{YYYY-MM-DD} = { reason, createdBy, createdAt }. Admin writes, every active user reads.
-const col = () => collection(db, 'blockedDates');
+const col = () => calCollection('blockedDates');
 
 /** Live map of closed dates: "2026-12-25" -> "Christmas". */
 export function watchBlocked(cb, onError) {

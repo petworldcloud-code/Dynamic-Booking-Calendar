@@ -7,6 +7,8 @@ import * as retention from './retention.js';
 import * as slots from './slots.js';
 import * as blocked from './blocked.js';
 import * as notify from './notify.js';
+import * as calendars from './calendars.js';
+import * as companies from './companies.js';
 import { isConfigured } from './firebase.js';
 import * as demo from './demo.js';
 
@@ -25,7 +27,11 @@ const real = {
   watchSlots: slots.watchSlots, saveSlots: slots.saveSlots,
   watchBlocked: blocked.watchBlocked, blockDates: blocked.blockDates, unblockDate: blocked.unblockDate,
   watchRecipients: notify.watchRecipients, saveRecipient: notify.saveRecipient, removeRecipient: notify.removeRecipient,
-  watchNotifySettings: notify.watchNotifySettings, saveNotifySettings: notify.saveNotifySettings
+  watchNotifySettings: notify.watchNotifySettings, saveNotifySettings: notify.saveNotifySettings,
+  setCalendar: calendars.setCalendar, getCalendar: calendars.getCalendar,
+  watchCalendars: calendars.watchCalendars, createCalendar: calendars.createCalendar, setCalendarActive: calendars.setCalendarActive,
+  watchCompanies: companies.watchCompanies, addCompany: companies.addCompany,
+  updateCompany: companies.updateCompany, setCompanyActive: companies.setCompanyActive
 };
 
 export const api = DEMO ? demo.api : real;

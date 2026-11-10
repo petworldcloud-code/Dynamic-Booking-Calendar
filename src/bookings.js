@@ -1,8 +1,9 @@
 import {
-  collection, doc, query, where, orderBy, limit, onSnapshot, getDoc, writeBatch,
+  doc, query, where, orderBy, limit, onSnapshot, getDoc, writeBatch,
   runTransaction, serverTimestamp, deleteField
 } from 'firebase/firestore';
 import { db } from './firebase.js';
+import { calCollection, calDoc } from './calendars.js';
 
 export const TRUCK_COUNTS = [1, 2, 3, 4, 5, 6];
 
@@ -11,8 +12,8 @@ const isEmpty = (v) => v === undefined || v === null || v === '';
 const present = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => !isEmpty(v)));
 const clearable = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, isEmpty(v) ? deleteField() : v]));
 
-const col = () => collection(db, 'bookings');
-const attCol = (bookingId) => collection(db, 'bookings', bookingId, 'attachments');
+const col = () => calCollection('bookings');
+const attCol = (bookingId) => calCollection('bookings', bookingId, 'attachments');
 const WRITE_TIMEOUT_MS = 20000;
 
 const toBooking = (d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) });
@@ -70,7 +71,7 @@ export function createBooking(user, fields, files = []) {
 
 /** Optimistic concurrency: refuse if the stored version is newer than the one being edited. */
 export function updateBooking(user, id, expectedUpdatedMs, fields, { add = [], remove = [] } = {}) {
-  const ref = doc(db, 'bookings', id);
+  const ref = calDoc('bookings', id);
   return withTimeout(runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists()) throw Object.assign(new Error('This booking no longer exists.'), { code: 'gone' });
@@ -95,7 +96,7 @@ export function updateBooking(user, id, expectedUpdatedMs, fields, { add = [], r
 export function deleteBooking(booking) {
   const batch = writeBatch(db);
   (booking.attachments || []).forEach((a) => batch.delete(doc(attCol(booking.id), a.id)));
-  batch.delete(doc(db, 'bookings', booking.id));
+  batch.delete(calDoc('bookings', booking.id));
   return withTimeout(batch.commit());
 }
 
