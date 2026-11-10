@@ -15,6 +15,14 @@ const calendars = [
   { id: 'dim', name: 'DIM', order: 1, active: true }, { id: 'tg', name: 'TG', order: 2, active: true },
   { id: 'nf', name: 'NF', order: 3, active: true }, { id: 'pme', name: 'PME', order: 4, active: true }
 ];
+// Per-calendar company lists (id = lowercase name). Each company has its own colour.
+const PAL = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#4d7c0f', '#ea580c', '#475569', '#0d9488', '#9333ea'];
+const mkCos = (list) => list.map((n, i) => ({ id: n.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: n, color: PAL[i % PAL.length], active: true }));
+const companies = {
+  dim: mkCos(['Tefal', 'Sony', '3M', 'GOON', 'Nestle', 'Unilever', 'Coca Cola', 'Watsons', 'Dove', 'Pepsi', 'Samsung', 'Lenovo']),
+  tg: mkCos(['TG Logistics', 'Shell', 'Petronas']), nf: mkCos(['NF Supplier']), pme: []
+};
+const coSubs = new Set();
 let currentCal = null;
 const inCal = (r) => (r.cal || 'dim') === (currentCal || 'dim');
 let seq = 0;
@@ -34,7 +42,7 @@ function mk(dayOffset, eventName, n = 0, cal = 'dim') {
   seq += 1;
   return {
     cal,
-    id: `d${String(seq).padStart(3, '0')}`, bookingDate: addDays(todayISO(), dayOffset), eventName, notes: '',
+    id: `d${String(seq).padStart(3, '0')}`, ...(companies[cal]?.find((c) => c.name === eventName) ? { companyId: companies[cal].find((c) => c.name === eventName).id } : {}), bookingDate: addDays(todayISO(), dayOffset), eventName, notes: '',
     ...(seq % 5 === 0 ? { vehicleType: 'Van' } : { vehicleType: 'Truck', truckType: ['40footer', '20footer', '10ton', '5ton', '3ton', '1ton'][seq % 6] }),
     deliveryType: ['Delivery stock', 'Container pull', 'Unloading'][seq % 3],
     truckCount: (seq % 6) + 1, palletized: seq % 2 === 0, ...(seq % 3 === 0 ? { plateNumber: `WXY ${1000 + seq}` } : {}), attachments: [],
@@ -67,7 +75,11 @@ export const api = {
     return () => {};
   },
   createCalendar: async () => {}, setCalendarActive: async () => {},
-  watchCompanies(cb) { cb([]); return () => {}; },
+  watchCompanies(cb) {
+    const run = () => cb((companies[currentCal || 'dim'] || []).map((c) => ({ ...c })));
+    coSubs.add(run); run();
+    return () => coSubs.delete(run);
+  },
   addCompany: async () => {}, updateCompany: async () => {}, setCompanyActive: async () => {},
   watchRange(s, e, cb) { return sub(() => cb(rows.filter((r) => inCal(r) && r.bookingDate >= s && r.bookingDate <= e).sort(byDate))); },
   watchList({ from, before, max = 50 }, cb) {

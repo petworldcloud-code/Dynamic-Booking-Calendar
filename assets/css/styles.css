@@ -136,6 +136,8 @@ details.gen { margin: 10px 0; padding: 8px 10px; background: var(--lavender); bo
 details.gen summary { cursor: pointer; font-weight: 600; color: var(--purple); }
 details.gen .ghost { margin-top: 4px; }
 @media (max-width: 600px) { .row3 { grid-template-columns: 1fr 1fr; } .row3 > button { grid-column: 1 / -1; } }
+.evt.co { background: color-mix(in srgb, var(--c) 16%, #fff); border-left: 4px solid var(--c); }
+.co-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: baseline; }
 .tone-blue { background: var(--pale-blue); }
 .tone-lavender { background: var(--lavender); }
 .tone-green { background: var(--pale-green); }

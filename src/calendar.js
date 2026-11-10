@@ -27,7 +27,7 @@ export function toneFor(name) {
  * Render the calendar grid into `root`.
  * handlers: { onDay(iso, list), onBooking(booking) }
  */
-export function renderCalendar(root, { start, today, bookings, blocked = new Map() }, handlers) {
+export function renderCalendar(root, { start, today, bookings, blocked = new Map(), colorOf = () => null }, handlers) {
   const range = buildRange(start);
   const byDay = new Map();
   for (const b of bookings) {
@@ -63,7 +63,8 @@ export function renderCalendar(root, { start, today, bookings, blocked = new Map
           closed ? h('div', { class: 'cal-closed' }, `Closed${blocked.get(iso) ? `: ${blocked.get(iso)}` : ''}`) : null,
           h('div', { class: 'cal-events' },
             shown.map((b) => h('button', {
-              class: `evt tone-${toneFor(b.eventName)}`, type: 'button',
+              class: `evt ${colorOf(b) ? 'co' : `tone-${toneFor(b.eventName)}`}`, type: 'button',
+              style: colorOf(b) ? `--c:${colorOf(b)}` : null,
               title: `${b.eventName}${b.timeSlot ? ` — ${slotLabel(b.timeSlot)}` : ''}${b.deliveryType ? ` — ${b.deliveryType}` : ''}${vehicleText(b) ? ` — ${b.truckCount} × ${vehicleText(b)}` : ''}${b.plateNumber ? ` — ${b.plateNumber}` : ''}${b.attachments?.length ? ` — ${b.attachments.length} attachment(s)` : ''}`,
               onclick: () => handlers.onBooking(b)
             }, b.timeSlot ? h('span', { class: 'evt-time' }, `${slotStart(b.timeSlot)} `) : null, b.eventName, vehicleText(b) ? h('span', { class: 'evt-truck' }, ` ${b.truckCount}×${vehicleText(b)}`) : null)),

@@ -34,9 +34,10 @@ const state = {
   // Multiple calendars. multi=false means the old single-calendar site (no "calendars" yet).
   multi: false,
   calendars: [], // [{ id: "tg", name, order, active }]
+  companyList: [], // this calendar's companies [{ id, name, color, active }] (multi-calendar mode)
   cal: undefined // undefined = nothing loaded, null = old single calendar, "tg" = that calendar
 };
-let unCals = null; let unRange = null; let unList = null; let unSession = null; let unUsers = null; let unCompanies = null; let unSlots = null; let unBlocked = null; let unRecips = null; let unNotify = null;
+let unCos = null; let unCals = null; let unRange = null; let unList = null; let unSession = null; let unUsers = null; let unCompanies = null; let unSlots = null; let unBlocked = null; let unRecips = null; let unNotify = null;
 
 // ---------- small UI helpers ----------
 function toast(msg, kind = 'ok') {
@@ -244,6 +245,13 @@ function drawRole() {
 
 /** Everything that belongs to one calendar: bookings, time slots, blocked dates, email alerts. */
 function startCalendarData() {
+  unCos?.(); unCos = null;
+  if (state.multi && state.cal) {
+    unCos = api.watchCompanies((list) => {
+      state.companyList = list; drawCalendar(); drawTable();
+      if (state.dayISO && $('dlg-day').open) drawDay();
+    }, () => {});
+  }
   unSlots?.();
   unSlots = api.watchSlots((list) => { state.slots = list; }, () => {});
   unBlocked?.();
@@ -262,8 +270,9 @@ function startCalendarData() {
   startList();
 }
 function stopCalendarData() {
-  unRange?.(); unList?.(); unSlots?.(); unBlocked?.(); unRecips?.(); unNotify?.();
-  unRange = unList = unSlots = unBlocked = unRecips = unNotify = null;
+  unRange?.(); unList?.(); unSlots?.(); unBlocked?.(); unRecips?.(); unNotify?.(); unCos?.();
+  unRange = unList = unSlots = unBlocked = unRecips = unNotify = unCos = null;
+  state.companyList = [];
   state.recipients = []; state.notify = { ...DEFAULT_NOTIFY }; state.dayISO = null; state.editing = null; state.viewing = null;
   state.calBookings = []; state.listBookings = []; state.known.clear(); state.slots = []; state.blocked = new Map();
 }
@@ -293,8 +302,17 @@ function drawHeader() {
   b.textContent = DEMO ? 'DEMO MODE — sample data in memory only. Nothing is saved to Firebase.' : '';
 }
 
+/** A company's own colour (multi-calendar mode). Matches by id, else by name for older bookings. */
+function colorFor(b) {
+  if (!state.multi) return null;
+  const c = state.companyList.find((x) => x.id === b.companyId)
+    || state.companyList.find((x) => x.name.toLowerCase() === String(b.eventName).toLowerCase());
+  return c?.color || null;
+}
+const dot = (b) => (colorFor(b) ? h('span', { class: 'co-dot', style: `background:${colorFor(b)}`, 'aria-hidden': 'true' }) : null);
+
 function drawCalendar() {
-  renderCalendar($('cal'), { start: rangeStart(), today: state.today, bookings: state.calBookings, blocked: state.blocked }, {
+  renderCalendar($('cal'), { start: rangeStart(), today: state.today, bookings: state.calBookings, blocked: state.blocked, colorOf: colorFor }, {
     onDay: openDay, onBooking: (b) => openView(b)
   });
 }
@@ -329,7 +347,7 @@ function drawTable() {
   $('rows').replaceChildren(...list.map((b, i) => h('tr', {},
     h('td', { class: 'c-n' }, String(i + 1)),
     h('td', { class: 'c-d' }, formatDisplay(b.bookingDate)),
-    h('td', {}, h('button', { class: 'cell-link', type: 'button', title: `Added by ${b.createdByName}`, onclick: () => openView(b) }, b.eventName),
+    h('td', {}, dot(b), h('button', { class: 'cell-link', type: 'button', title: `Added by ${b.createdByName}`, onclick: () => openView(b) }, b.eventName),
       h('span', { class: 'sub' }, bookingInfo(b))),
     h('td', { class: 'c-a' }, actionButtons(b)))));
   $('empty').hidden = list.length > 0;
@@ -345,13 +363,24 @@ function drawDay() {
   $('day-closed').textContent = closed ? `Closed for bookings${state.blocked.get(state.dayISO) ? `: ${state.blocked.get(state.dayISO)}` : ''}.` : '';
   $('day-add').hidden = closed;
   $('day-list').replaceChildren(...(list.length ? list.map((b) => h('li', {},
-    h('div', {}, h('button', { class: 'cell-link', type: 'button', onclick: () => openView(b) }, h('strong', {}, b.eventName)), h('span', { class: 'sub' }, bookingInfo(b))),
+    h('div', {}, dot(b), h('button', { class: 'cell-link', type: 'button', onclick: () => openView(b) }, h('strong', {}, b.eventName)), h('span', { class: 'sub' }, bookingInfo(b))),
     actionButtons(b))) : [h('li', { class: 'muted' }, 'No bookings on this date.')]));
 }
 
 // ---------- company dropdown ----------
-function fillCompany(current) {
+const KEEP = '__keep__'; // an old booking whose company is no longer in the list keeps it as it is
+function fillCompany(current, booking) {
   const sel = $('b-company');
+  if (state.multi) {
+    const active = state.companyList.filter((c) => c.active !== false);
+    const own = booking && !active.some((c) => c.id === booking.companyId) ? booking : null;
+    sel.replaceChildren(
+      h('option', { value: '' }, active.length || own ? 'Select company…' : 'No companies yet'),
+      ...active.map((c) => h('option', { value: c.id }, c.name)),
+      own ? h('option', { value: KEEP }, `${own.eventName} (not in list)`) : null);
+    sel.value = booking ? (own ? KEEP : booking.companyId) : '';
+    return;
+  }
   const own = state.session.profile.displayName;
   const names = isAdmin() ? [...state.companies] : [];
   const pick = current || own;
@@ -391,6 +420,8 @@ function fillSlot(current) {
 function openView(b) {
   state.viewing = b;
   $('v-company').textContent = b.eventName;
+  $('v-company').style.borderLeft = colorFor(b) ? `6px solid ${colorFor(b)}` : '';
+  $('v-company').style.paddingLeft = colorFor(b) ? '8px' : '';
   $('v-date').textContent = `${weekdayName(b.bookingDate)}, ${formatDisplay(b.bookingDate)}`;
   $('v-slot').textContent = b.timeSlot ? slotLabel(b.timeSlot) : '—';
   const vehicle = vehicleOf(b);
@@ -426,7 +457,7 @@ function openBookingDialog(b, presetDate) {
   state.editing = editing ? { id: b.id, expectedMs: api.millis(b.updatedAt) } : null;
   $('dlg-booking-title').textContent = editing ? (canEdit(b) ? 'Edit Booking' : 'Booking details') : 'Add Booking';
   $('b-date').value = editing ? b.bookingDate : (presetDate || state.today);
-  fillCompany(editing ? b.eventName : null);
+  fillCompany(editing ? b.eventName : null, editing ? b : null);
   fillSlot(editing ? b.timeSlot : null);
   $('b-notes').value = editing ? (b.notes || '') : '';
   $('b-delivery').value = editing ? (b.deliveryType || '') : '';
@@ -441,8 +472,9 @@ function openBookingDialog(b, presetDate) {
   const ro = editing && !canEdit(b);
   ['b-date', 'b-slot', 'b-company', 'b-notes', 'b-delivery', 'b-vehicle', 'b-truck', 'b-count', 'b-pallet', 'b-plate', 'b-files'].forEach((id) => { $(id).disabled = ro; });
   // Standard users: company is fixed to their own and shown as plain text, not a choice.
-  $('b-company').hidden = !isAdmin();
-  $('b-company-fixed').hidden = isAdmin();
+  const pickCompany = isAdmin() || state.multi; // in a calendar everyone chooses from its company list
+  $('b-company').hidden = !pickCompany;
+  $('b-company-fixed').hidden = pickCompany;
   $('b-company-fixed').value = $('b-company').value;
   state.files.readOnly = ro;
   drawAttachments();
@@ -512,6 +544,15 @@ async function addPickedFiles(fileList) {
   drawAttachments();
 }
 
+/** eventName (+ companyId in a calendar) for the booking being saved. */
+function companyFields() {
+  const v = $('b-company').value;
+  if (!state.multi) return { eventName: v };
+  if (v === KEEP) { const old = state.known.get(state.editing?.id); return { eventName: old?.eventName || '', companyId: old?.companyId }; }
+  const c = state.companyList.find((x) => x.id === v);
+  return { eventName: c ? c.name : '', companyId: c ? c.id : undefined };
+}
+
 async function saveBooking(e) {
   e.preventDefault();
   const err = $('b-error');
@@ -520,7 +561,7 @@ async function saveBooking(e) {
     palletized: $('b-pallet').value, plateNumber: $('b-plate').value
   };
   const f = {
-    bookingDate: $('b-date').value, eventName: $('b-company').value, notes: $('b-notes').value.trim(),
+    bookingDate: $('b-date').value, ...companyFields(), notes: $('b-notes').value.trim(),
     truckCount: raw.truckCount, ...vehicleFields(raw),
     timeSlot: $('b-slot-label').hidden ? '' : $('b-slot').value
   };
