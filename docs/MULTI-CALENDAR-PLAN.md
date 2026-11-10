@@ -2,6 +2,14 @@
 
 Status: **all decisions confirmed** (2026-11-10). Ready to build from Phase 1.
 
+Progress tracker: https://claude.ai/artifact/LKktzWLGn1vH17UxQ7f95s
+
+**After every phase is pushed,** update the tracker's shared data with the ArtifactData tool:
+
+- Collection `progress`, document `p1` … `p9`, body `{status: "done", note: "<commit sha + short summary>", at: "<ISO time>"}`.
+- Set `status: "doing"` when a phase starts.
+- Go-live steps are documents `g1` … `g8`, body `{done: true, at}`.
+
 v2 changes: accounts are now **staff** (email + password) tied to **one** calendar, and **companies** become a list per calendar that the admin maintains.
 
 ## Goal
