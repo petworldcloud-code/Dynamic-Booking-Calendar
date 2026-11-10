@@ -78,6 +78,7 @@ usernames/{name}                         kept only for old username logins
   - companies, calendars, time slots and blocked dates (writes only);
   - email recipients and email settings;
   - the notify log.
+- **Calendars list.** Every active user must be able to **read** `calendars` (list + get); only admins write. The app (Phase 2) turns multi-calendar mode on only when that read succeeds and the list is not empty. Until then it keeps the old single-calendar paths.
 - **Profiles.** Only admins can create staff or change a staff member's calendar or role. Staff cannot move themselves to another calendar.
 
 ## Email alerts
