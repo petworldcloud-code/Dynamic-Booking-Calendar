@@ -35,6 +35,10 @@ button { font: inherit; cursor: pointer; }
 .brand { display: flex; gap: 14px; align-items: center; min-width: 280px; flex: 1 1 380px; }
 .brand h1 { font-size: 1.9rem; color: var(--purple); }
 .brand p { margin: 2px 0 0; color: var(--muted); font-size: .9rem; max-width: 520px; }
+.cal-switch { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.cal-switch button { border: 1px solid var(--border); background: var(--white); color: var(--purple); border-radius: 999px; padding: 3px 14px; font-weight: 700; letter-spacing: .04em; }
+.cal-switch button.on { background: var(--purple); border-color: var(--purple); color: #fff; }
+.cal-switch button:not(.on):hover { background: var(--lavender); }
 .logo { width: 52px; height: 52px; border-radius: 12px; background: var(--purple); display: grid; place-items: center; flex: none; }
 .logo.big { margin: 0 auto 10px; color: #fff; font-size: 1.6rem; }
 .top-info { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }

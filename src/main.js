@@ -4,6 +4,7 @@ import { prepareFile, base64ToBlobUrl, formatSize, MAX_FILES } from './attachmen
 import { vehicleOf, vehicleText, palletText, vehicleFields, vehicleProblem } from './booking-utils.js';
 import { slotLabel, slotStart, makeSlot, cleanSlots, generateSlots, MAX_SLOTS } from './slot-utils.js';
 import { scopeText, DEFAULT_NOTIFY } from './notify-utils.js';
+import { pickCalendar, visibleCalendars, calendarLabel } from './calendar-utils.js';
 import {
   todayISO, addDays, dateSpan, buildRange, formatDisplay, isValidISO, watchToday, weekdayName, RANGE_DAYS
 } from './date-utils.js';
@@ -29,9 +30,13 @@ const state = {
   notify: { ...DEFAULT_NOTIFY },
   editingEmail: null,
   viewing: null,
-  dayISO: null
+  dayISO: null,
+  // Multiple calendars. multi=false means the old single-calendar site (no "calendars" yet).
+  multi: false,
+  calendars: [], // [{ id: "tg", name, order, active }]
+  cal: undefined // undefined = nothing loaded, null = old single calendar, "tg" = that calendar
 };
-let unRange = null; let unList = null; let unSession = null; let unUsers = null; let unCompanies = null; let unSlots = null; let unBlocked = null; let unRecips = null; let unNotify = null;
+let unCals = null; let unRange = null; let unList = null; let unSession = null; let unUsers = null; let unCompanies = null; let unSlots = null; let unBlocked = null; let unRecips = null; let unNotify = null;
 
 // ---------- small UI helpers ----------
 function toast(msg, kind = 'ok') {
@@ -120,9 +125,9 @@ function onSession(s) {
   const wasActive = state.session?.state === 'active';
   state.session = s;
   if (s.state === 'active') {
-    if (!wasActive) startApp();
+    if (!wasActive) startApp(); else reconcileCalendar(); // the admin may have moved this person to another calendar
     $('user-name').textContent = s.profile.displayName;
-    $('user-role').textContent = s.profile.role === 'admin' ? 'Administrator' : 'Standard user';
+    drawRole();
     $('btn-users').hidden = $('btn-settings').hidden = $('btn-slots').hidden = $('btn-blocked').hidden = $('btn-notify').hidden = s.profile.role !== 'admin';
     return;
   }
@@ -165,6 +170,80 @@ function startApp() {
   unCompanies = isAdmin() ? api.watchUsers((list) => {
     state.companies = list.filter((u) => u.status !== 'suspended').map((u) => u.displayName).sort((a, b) => a.localeCompare(b));
   }, () => {}) : null;
+  startCalendars();
+}
+
+// ---------- calendars ----------
+// Multi-calendar mode switches on by itself once the "calendars" list exists and the rules let us
+// read it. Until then (today's live site) the app keeps using the old single-calendar paths.
+function startCalendars() {
+  unCals?.();
+  let heard = false;
+  unCals = api.watchCalendars((list) => {
+    heard = true;
+    state.calendars = list;
+    if (list.length) { state.multi = true; reconcileCalendar(); } else if (!state.multi) useSingleCalendar();
+  }, (e) => {
+    if (!heard && !state.multi) useSingleCalendar(); else toast(friendly(e), 'err');
+  });
+}
+
+function useSingleCalendar() {
+  if (state.cal === null) return;
+  openCalendar(null);
+}
+
+const hashCode = () => decodeURIComponent(location.hash.replace(/^#/, '')).toLowerCase();
+
+/** Open the calendar this person should see: the link's (#tg) if allowed, else their own / the first. */
+function reconcileCalendar() {
+  if (!state.multi || state.session?.state !== 'active') return;
+  const visible = visibleCalendars(state.session.profile, state.calendars);
+  const wanted = visible.some((c) => c.id === hashCode()) ? hashCode() : state.cal; // ignore links to other calendars
+  const target = pickCalendar(state.session.profile, state.calendars, wanted);
+  if (!target) { noCalendarScreen(); return; }
+  if (target !== state.cal) openCalendar(target);
+  else { if (hashCode() !== target) history.replaceState(null, '', `#${target}`); drawHeader(); }
+}
+
+function openCalendar(code) {
+  stopCalendarData();
+  state.cal = code;
+  api.setCalendar(code);
+  if (code && hashCode() !== code) history.replaceState(null, '', `#${code}`);
+  // Dialogs show the old calendar's data, so close them.
+  document.querySelectorAll('dialog[open]').forEach((d) => d.close());
+  showApp();
+  startCalendarData();
+}
+
+function noCalendarScreen() {
+  stopCalendarData();
+  state.cal = undefined;
+  showScreen('No calendar assigned', [
+    h('p', {}, 'Your account is not linked to a calendar yet. Ask an administrator to give you access.'),
+    h('button', { class: 'ghost', type: 'button', onclick: () => api.logout() }, 'Log out')]);
+}
+
+function drawSwitcher() {
+  const box = $('cal-switch');
+  const list = state.multi && isAdmin() ? visibleCalendars(state.session.profile, state.calendars) : [];
+  box.hidden = list.length < 2;
+  box.replaceChildren(...list.map((c) => h('button', {
+    type: 'button', class: c.id === state.cal ? 'on' : '', 'aria-pressed': String(c.id === state.cal),
+    onclick: () => { if (c.id !== state.cal) openCalendar(c.id); }
+  }, calendarLabel(c.id))));
+}
+
+function drawRole() {
+  const p = state.session?.profile;
+  if (!p) return;
+  $('user-role').textContent = p.role === 'admin' ? 'Administrator'
+    : state.multi && p.calendar ? `Staff · ${calendarLabel(p.calendar)}` : 'Standard user';
+}
+
+/** Everything that belongs to one calendar: bookings, time slots, blocked dates, email alerts. */
+function startCalendarData() {
   unSlots?.();
   unSlots = api.watchSlots((list) => { state.slots = list; }, () => {});
   unBlocked?.();
@@ -182,11 +261,18 @@ function startApp() {
   startRange();
   startList();
 }
-function stopApp() {
-  unRange?.(); unList?.(); unUsers?.(); unCompanies?.(); unSlots?.(); unBlocked?.(); unRecips?.(); unNotify?.();
-  unRange = unList = unUsers = unCompanies = unSlots = unBlocked = unRecips = unNotify = null;
-  state.recipients = [];
+function stopCalendarData() {
+  unRange?.(); unList?.(); unSlots?.(); unBlocked?.(); unRecips?.(); unNotify?.();
+  unRange = unList = unSlots = unBlocked = unRecips = unNotify = null;
+  state.recipients = []; state.notify = { ...DEFAULT_NOTIFY }; state.dayISO = null; state.editing = null; state.viewing = null;
   state.calBookings = []; state.listBookings = []; state.known.clear(); state.slots = []; state.blocked = new Map();
+}
+function stopApp() {
+  stopCalendarData();
+  unCals?.(); unUsers?.(); unCompanies?.();
+  unCals = unUsers = unCompanies = null;
+  state.multi = false; state.calendars = []; state.cal = undefined;
+  api.setCalendar(null);
 }
 
 // ---------- rendering ----------
@@ -197,6 +283,11 @@ function drawHeader() {
   $('range-label').textContent = `${formatDisplay(r.start)} – ${formatDisplay(r.end)}`;
   $('range-days').textContent = `(${RANGE_DAYS} days)`;
   $('nav-today').disabled = state.viewStart === null;
+  const title = state.multi && state.cal ? `${calendarLabel(state.cal)} · Booking Calendar` : 'Dynamic Booking Calendar';
+  $('app-title').textContent = title;
+  document.title = title;
+  drawSwitcher();
+  drawRole();
   const b = $('banner');
   b.hidden = !DEMO;
   b.textContent = DEMO ? 'DEMO MODE — sample data in memory only. Nothing is saved to Firebase.' : '';
@@ -758,6 +849,9 @@ function wire() {
   $('tab-up').onclick = () => setTab('up');
   $('tab-hist').onclick = () => setTab('hist');
   $('more').onclick = () => { state.limit += PAGE; startList(); };
+
+  // A #tg link (or the back button) opens that calendar, if this person may use it.
+  window.addEventListener('hashchange', () => reconcileCalendar());
 
   // Midnight in Kuala Lumpur: advance "today"; keep a manually chosen period untouched.
   watchToday((t) => {

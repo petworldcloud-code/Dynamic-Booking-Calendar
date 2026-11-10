@@ -3,8 +3,20 @@
 import { todayISO, addDays } from './date-utils.js';
 import { cleanRecipient, cleanNotifySettings, DEFAULT_NOTIFY, MAX_RECIPIENTS } from './notify-utils.js';
 
-const me = { uid: 'demo-admin', displayName: 'Demo Admin', email: 'demo@example.com' };
-const profile = { ...me, role: 'admin', status: 'active' };
+// ?as=tg opens the demo as TG staff; ?as=none as staff with no calendar. Default: admin.
+const asParam = new URLSearchParams(globalThis.location?.search || '').get('as');
+const me = asParam
+  ? { uid: 'demo-staff', displayName: 'Demo Staff', email: 'staff@example.com' }
+  : { uid: 'demo-admin', displayName: 'Demo Admin', email: 'demo@example.com' };
+const profile = asParam
+  ? { ...me, role: 'staff', status: 'active', ...(asParam === 'none' ? {} : { calendar: asParam }) }
+  : { ...me, role: 'admin', status: 'active' };
+const calendars = [
+  { id: 'dim', name: 'DIM', order: 1, active: true }, { id: 'tg', name: 'TG', order: 2, active: true },
+  { id: 'nf', name: 'NF', order: 3, active: true }, { id: 'pme', name: 'PME', order: 4, active: true }
+];
+let currentCal = null;
+const inCal = (r) => (r.cal || 'dim') === (currentCal || 'dim');
 let seq = 0;
 let rows = [];
 const subs = new Set();
@@ -18,9 +30,10 @@ const recipients = new Map([['ops@example.com', { email: 'ops@example.com', allC
 let notifySettings = { ...DEFAULT_NOTIFY };
 
 const names = ['Tefal', 'Sony', '3M', 'GOON', 'Nestle', 'Unilever', 'Coca Cola', 'Watsons', 'Dove', 'Pepsi', 'Samsung', 'Lenovo'];
-function mk(dayOffset, eventName, n = 0) {
+function mk(dayOffset, eventName, n = 0, cal = 'dim') {
   seq += 1;
   return {
+    cal,
     id: `d${String(seq).padStart(3, '0')}`, bookingDate: addDays(todayISO(), dayOffset), eventName, notes: '',
     ...(seq % 5 === 0 ? { vehicleType: 'Van' } : { vehicleType: 'Truck', truckType: ['40footer', '20footer', '10ton', '5ton', '3ton', '1ton'][seq % 6] }),
     deliveryType: ['Delivery stock', 'Container pull', 'Unloading'][seq % 3],
@@ -34,6 +47,8 @@ function mk(dayOffset, eventName, n = 0) {
   .forEach(([d, i]) => rows.push(mk(d, names[i])));
 for (let i = 0; i < 8; i++) rows.push(mk(12, `Overflow ${i + 1}`)); // 8 on one day => "+2 more"
 rows.push(mk(-5, 'Past booking A'), mk(-30, 'Past booking B'));
+[[0, 'TG Logistics'], [2, 'Shell'], [8, 'Petronas']].forEach(([d, n]) => rows.push(mk(d, n, 0, 'tg')));
+rows.push(mk(1, 'NF Supplier', 0, 'nf'));
 
 const byDate = (a, b) => a.bookingDate.localeCompare(b.bookingDate) || a.createdAt.toMillis() - b.createdAt.toMillis();
 
@@ -43,16 +58,28 @@ export const api = {
   watchSession(cb) { setTimeout(() => cb({ state: 'active', user: me, profile }), 50); return () => {}; },
   login: async () => {}, logout: async () => {}, resetPassword: async () => {},
   adminCreateUser: async () => 'demo-new', changePassword: async () => {},
-  watchRange(s, e, cb) { return sub(() => cb(rows.filter((r) => r.bookingDate >= s && r.bookingDate <= e).sort(byDate))); },
+  setCalendar(c) { currentCal = c || null; },
+  getCalendar: () => currentCal,
+  // ?legacy acts like today's live site, where the rules refuse the calendars list.
+  watchCalendars(cb, onError) {
+    const legacy = new URLSearchParams(globalThis.location?.search || '').has('legacy');
+    setTimeout(() => (legacy ? onError({ code: 'permission-denied' }) : cb(calendars.map((c) => ({ ...c })))), 20);
+    return () => {};
+  },
+  createCalendar: async () => {}, setCalendarActive: async () => {},
+  watchCompanies(cb) { cb([]); return () => {}; },
+  addCompany: async () => {}, updateCompany: async () => {}, setCompanyActive: async () => {},
+  watchRange(s, e, cb) { return sub(() => cb(rows.filter((r) => inCal(r) && r.bookingDate >= s && r.bookingDate <= e).sort(byDate))); },
   watchList({ from, before, max = 50 }, cb) {
     return sub(() => {
-      const l = before ? rows.filter((r) => r.bookingDate < before).sort((a, b) => byDate(b, a))
-        : rows.filter((r) => r.bookingDate >= from).sort(byDate);
+      const mine = rows.filter(inCal);
+      const l = before ? mine.filter((r) => r.bookingDate < before).sort((a, b) => byDate(b, a))
+        : mine.filter((r) => r.bookingDate >= from).sort(byDate);
       cb(l.slice(0, max));
     });
   },
   async createBooking(user, f, files = []) {
-    seq += 1; rows.push({ ...mk(0, f.eventName), ...f, attachments: files.map(({ id, name, type, size }) => ({ id, name, type, size })), id: `d${seq}x` }); notify();
+    seq += 1; rows.push({ ...mk(0, f.eventName, 0, currentCal || 'dim'), ...f, attachments: files.map(({ id, name, type, size }) => ({ id, name, type, size })), id: `d${seq}x` }); notify();
   },
   getAttachment: async () => null,
   async updateBooking(user, id, expected, f) {
