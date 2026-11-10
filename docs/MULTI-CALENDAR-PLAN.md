@@ -1,6 +1,6 @@
 # Plan: Multiple calendars (DIM, TG, NF, PME)
 
-Status: **draft v2, waiting for owner approval** (2026-11-10). Nothing is built yet.
+Status: **all decisions confirmed** (2026-11-10). Ready to build from Phase 1.
 
 v2 changes: accounts are now **staff** (email + password) tied to **one** calendar, and **companies** become a list per calendar that the admin maintains.
 
@@ -63,7 +63,8 @@ usernames/{name}                         kept only for old username logins
 - **Bookings** under `calendars/{cal}/…` need `canUse(cal)` plus today's checks:
   - shape and limits;
   - blocked dates apply to everyone;
-  - creation info can't be changed.
+  - creation info can't be changed;
+  - staff edit or delete only bookings they created, and an admin can change any booking.
 - **Company on a booking.** It must point to an **active company of that same calendar**, and the booking's company name must match it. Staff therefore cannot book for a company from another calendar or invent one.
 - **Admin-only areas:**
   - companies, calendars, time slots and blocked dates (writes only);
@@ -153,9 +154,4 @@ Phases 1–8 change nothing on the live site. It changes only in phase 9, in the
 3. **No per-calendar admins.** Admins see everything.
 4. **Calendar names are the codes** DIM / TG / NF / PME.
 5. **No calendar colours.** Each company has its own colour instead.
-
-## Still open
-
-6. **Who can edit or delete a booking?**
-   - **Option A:** staff can edit or delete only the bookings they made, as today, and the admin can change any booking.
-   - **Option B:** any staff member of that calendar can edit or delete any booking in it.
+6. **Staff edit or delete only the bookings they made** (as today). The admin can change any booking. Staff can still view every booking in their calendar.
