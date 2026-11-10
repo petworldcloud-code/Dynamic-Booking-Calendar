@@ -4,7 +4,7 @@ import { prepareFile, base64ToBlobUrl, formatSize, MAX_FILES } from './attachmen
 import { vehicleOf, vehicleText, palletText, vehicleFields, vehicleProblem } from './booking-utils.js';
 import { slotLabel, slotStart, makeSlot, cleanSlots, generateSlots, MAX_SLOTS } from './slot-utils.js';
 import { scopeText, DEFAULT_NOTIFY } from './notify-utils.js';
-import { pickCalendar, visibleCalendars, calendarLabel } from './calendar-utils.js';
+import { pickCalendar, visibleCalendars, calendarLabel, nextCompanyColor, COLOR_RE, cleanCalendarCode } from './calendar-utils.js';
 import {
   todayISO, addDays, dateSpan, buildRange, formatDisplay, isValidISO, watchToday, weekdayName, RANGE_DAYS
 } from './date-utils.js';
@@ -129,6 +129,7 @@ function onSession(s) {
     if (!wasActive) startApp(); else reconcileCalendar(); // the admin may have moved this person to another calendar
     $('user-name').textContent = s.profile.displayName;
     drawRole();
+    drawAdminButtons();
     $('btn-users').hidden = $('btn-settings').hidden = $('btn-slots').hidden = $('btn-blocked').hidden = $('btn-notify').hidden = s.profile.role !== 'admin';
     return;
   }
@@ -183,6 +184,7 @@ function startCalendars() {
   unCals = api.watchCalendars((list) => {
     heard = true;
     state.calendars = list;
+    if ($('dlg-cals').open) drawCalendarList();
     if (list.length) { state.multi = true; reconcileCalendar(); } else if (!state.multi) useSingleCalendar();
   }, (e) => {
     if (!heard && !state.multi) useSingleCalendar(); else toast(friendly(e), 'err');
@@ -236,6 +238,10 @@ function drawSwitcher() {
   }, calendarLabel(c.id))));
 }
 
+function drawAdminButtons() {
+  $('btn-cals').hidden = $('btn-cos').hidden = !(state.multi && isAdmin());
+}
+
 function drawRole() {
   const p = state.session?.profile;
   if (!p) return;
@@ -249,6 +255,7 @@ function startCalendarData() {
   if (state.multi && state.cal) {
     unCos = api.watchCompanies((list) => {
       state.companyList = list; drawCalendar(); drawTable();
+      if ($('dlg-cos').open) drawCompanyList();
       if (state.dayISO && $('dlg-day').open) drawDay();
     }, () => {});
   }
@@ -297,6 +304,7 @@ function drawHeader() {
   document.title = title;
   drawSwitcher();
   drawRole();
+  drawAdminButtons();
   const b = $('banner');
   b.hidden = !DEMO;
   b.textContent = DEMO ? 'DEMO MODE — sample data in memory only. Nothing is saved to Firebase.' : '';
@@ -608,30 +616,81 @@ function confirmDelete(b) {
 }
 
 // ---------- admin ----------
+const roleOf = (u) => (u.role === 'admin' ? 'admin' : 'staff'); // older accounts have role "user"
+let usersHelpLegacy = '';
+
+function setupUsersDialog() {
+  const multi = state.multi;
+  if (!usersHelpLegacy) usersHelpLegacy = $('users-help').textContent;
+  $('nu-title').textContent = multi ? 'Add staff or administrator' : 'Add user';
+  $('nu-name').placeholder = multi ? 'Full name' : 'Company name (also the username)';
+  $('nu-name').setAttribute('aria-label', multi ? 'Full name' : 'Company name');
+  $('nu-email').placeholder = multi ? 'Email (they log in with it)' : 'Email (optional, enables password reset)';
+  $('nu-email').required = multi;
+  $('nu-role').replaceChildren(...(multi
+    ? [h('option', { value: 'staff' }, 'Staff (one calendar)'), h('option', { value: 'admin' }, 'Administrator (all calendars)')]
+    : [h('option', { value: 'user' }, 'Standard user'), h('option', { value: 'admin' }, 'Administrator')]));
+  const cals = state.calendars.filter((c) => c.active !== false);
+  $('nu-cal').replaceChildren(h('option', { value: '' }, 'Calendar…'), ...cals.map((c) => h('option', { value: c.id }, calendarLabel(c.id))));
+  $('nu-cal').hidden = !multi; $('nu-cal').required = multi;
+  $('nu-role').onchange = () => { const staff = $('nu-role').value === 'staff'; $('nu-cal').hidden = !staff; $('nu-cal').required = staff; };
+  $('users-filter-label').hidden = !multi;
+  $('users-filter').replaceChildren(h('option', { value: '*' }, 'All calendars'),
+    ...state.calendars.map((c) => h('option', { value: c.id }, calendarLabel(c.id))), h('option', { value: '-' }, 'No calendar'));
+  $('users-filter').onchange = () => drawUsersTable();
+  $('users-help').textContent = multi
+    ? 'Staff log in with their email and the initial password you set, and only see the calendar chosen here. Administrators see every calendar. Change a person\'s calendar in the table. Set Status to "suspended" to block someone. Removing a login completely is done in the Firebase Console.'
+    : usersHelpLegacy;
+  $('users-head').replaceChildren(h('tr', {}, ...(multi
+    ? ['Name', 'Email', 'Role', 'Calendar', 'Status', 'Actions'] : ['Company', 'Username', 'Role', 'Status', 'Actions']).map((t) => h('th', {}, t))));
+}
+
+let usersList = [];
+function drawUsersTable() {
+  const multi = state.multi;
+  const f = multi ? $('users-filter').value : '*';
+  const list = usersList.filter((u) => f === '*' || (f === '-' ? !u.calendar && roleOf(u) !== 'admin' : u.calendar === f));
+  $('users-rows').replaceChildren(...list.map((u) => {
+    const self = u.uid === state.session.user.uid;
+    const sel = (key, opts, value = u[key]) => {
+      const s = h('select', { 'aria-label': `${key} for ${u.displayName}`, disabled: self }, opts.map((o) => h('option', { value: o, selected: value === o }, o)));
+      s.onchange = async () => { try { await api.updateUser(u.uid, { [key]: s.value }); toast('User updated.'); } catch (x) { toast(friendly(x), 'err'); s.value = value; } };
+      return s;
+    };
+    const acts = h('td', {}, self ? h('span', { class: 'muted' }, 'You') : h('span', { class: 'acts' },
+      h('button', { class: 'icon', type: 'button', onclick: () => openEditUser(u) }, 'Edit'),
+      h('button', { class: 'icon danger-text', type: 'button', onclick: () => confirmDeleteUser(u) }, multi ? 'Remove' : 'Delete')));
+    if (!multi) {
+      return h('tr', {}, h('td', {}, u.displayName), h('td', {}, u.username || u.displayName.trim().toLowerCase().replace(/\s+/g, '.')),
+        h('td', {}, sel('role', ['user', 'admin'])), h('td', {}, sel('status', ['pending', 'active', 'suspended'])), acts);
+    }
+    const admin = roleOf(u) === 'admin';
+    const calSel = h('select', { 'aria-label': `Calendar for ${u.displayName}`, disabled: self || admin },
+      h('option', { value: '' }, admin ? 'All' : 'None'),
+      ...state.calendars.map((c) => h('option', { value: c.id }, calendarLabel(c.id))));
+    calSel.value = admin ? '' : (u.calendar || '');
+    calSel.onchange = async () => {
+      try { await api.updateUser(u.uid, { calendar: calSel.value }); toast('Calendar changed.'); }
+      catch (x) { toast(friendly(x), 'err'); calSel.value = u.calendar || ''; }
+    };
+    return h('tr', {}, h('td', {}, u.displayName), h('td', {}, u.email?.endsWith('@dim-calendar.local') ? (u.username || '—') : (u.email || '—')),
+      h('td', {}, sel('role', ['staff', 'admin'], roleOf(u))), h('td', {}, calSel), h('td', {}, sel('status', ['pending', 'active', 'suspended'])), acts);
+  }));
+}
+
 function openUsers() {
   const dlg = $('dlg-users'); dlg.showModal();
+  setupUsersDialog();
   unUsers?.();
-  unUsers = api.watchUsers((list) => {
-    $('users-rows').replaceChildren(...list.map((u) => {
-      const self = u.uid === state.session.user.uid;
-      const sel = (key, opts) => {
-        const s = h('select', { 'aria-label': `${key} for ${u.displayName}`, disabled: self }, opts.map((o) => h('option', { value: o, selected: u[key] === o }, o)));
-        s.onchange = async () => { try { await api.updateUser(u.uid, { [key]: s.value }); toast('User updated.'); } catch (x) { toast(friendly(x), 'err'); s.value = u[key]; } };
-        return s;
-      };
-      return h('tr', {}, h('td', {}, u.displayName), h('td', {}, u.username || u.displayName.trim().toLowerCase().replace(/\s+/g, '.')), h('td', {}, sel('role', ['user', 'admin'])), h('td', {}, sel('status', ['pending', 'active', 'suspended'])),
-        h('td', {}, self ? h('span', { class: 'muted' }, 'You') : h('span', { class: 'acts' },
-          h('button', { class: 'icon', type: 'button', onclick: () => openEditUser(u) }, 'Edit'),
-          h('button', { class: 'icon danger-text', type: 'button', onclick: () => confirmDeleteUser(u) }, 'Delete'))));
-    }));
-  }, (e) => toast(friendly(e), 'err'));
+  unUsers = api.watchUsers((list) => { usersList = list; drawUsersTable(); }, (e) => toast(friendly(e), 'err'));
 }
 
 const usernameOf = (u) => u.username || u.displayName.trim().toLowerCase().replace(/\s+/g, '.');
 
 function openEditUser(u) {
   $('eu-name').value = u.displayName;
-  $('eu-username').textContent = `Username stays "${usernameOf(u)}" (renaming the company does not change the login).`;
+  $('dlg-edituser').querySelector('h3').textContent = state.multi ? 'Edit name' : 'Edit company';
+  $('eu-username').textContent = state.multi ? 'The login email does not change.' : `Username stays "${usernameOf(u)}" (renaming the company does not change the login).`;
   $('eu-error').hidden = true;
   $('form-edituser').onsubmit = async (e) => {
     e.preventDefault();
@@ -639,24 +698,64 @@ function openEditUser(u) {
     if (!name) return;
     try {
       // Keep the existing username when the display name changes.
-      await api.updateUser(u.uid, { displayName: name, ...(u.username ? {} : { username: usernameOf(u) }) });
-      $('dlg-edituser').close(); toast('Company updated.');
+      await api.updateUser(u.uid, { displayName: name, ...(u.username || state.multi ? {} : { username: usernameOf(u) }) });
+      $('dlg-edituser').close(); toast(state.multi ? 'Name updated.' : 'Company updated.');
     } catch (x) { $('eu-error').textContent = friendly(x); $('eu-error').hidden = false; }
   };
   $('dlg-edituser').showModal();
 }
 
 function confirmDeleteUser(u) {
-  $('cf-title').textContent = 'Delete company?';
+  $('cf-title').textContent = state.multi ? 'Remove this user?' : 'Delete company?';
   $('cf-text').textContent = `${u.displayName} will no longer be able to log in or see bookings. Their existing bookings stay on the calendar. (To remove the login completely, delete it in the Firebase Console.)`;
   const dlg = $('dlg-confirm');
   $('cf-yes').onclick = async () => {
     $('cf-yes').disabled = true;
-    try { await api.deleteUser(u.uid, usernameOf(u)); dlg.close(); toast('Company deleted.'); } catch (x) { toast(friendly(x), 'err'); } finally { $('cf-yes').disabled = false; }
+    try { await api.deleteUser(u.uid, u.username || (state.multi ? '' : usernameOf(u))); dlg.close(); toast(state.multi ? 'User removed.' : 'Company deleted.'); } catch (x) { toast(friendly(x), 'err'); } finally { $('cf-yes').disabled = false; }
   };
   $('cf-no').onclick = () => dlg.close();
   dlg.showModal();
 }
+
+// ---------- admin: calendars ----------
+function drawCalendarList() {
+  const list = [...state.calendars].sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id.localeCompare(b.id));
+  $('cal-list').replaceChildren(...list.map((c) => h('li', { class: c.active === false ? 'archived' : '' },
+    h('span', {}, h('strong', {}, calendarLabel(c.id)), c.active === false ? ' — archived (hidden from staff)' : ''),
+    h('button', {
+      type: 'button', class: 'icon', onclick: async () => {
+        try { await api.setCalendarActive(c.id, c.active === false); toast(c.active === false ? 'Calendar restored.' : 'Calendar archived.'); } catch (x) { toast(friendly(x), 'err'); }
+      }
+    }, c.active === false ? 'Restore' : 'Archive'))));
+}
+
+function openCalendars() { $('cal-error').hidden = true; drawCalendarList(); $('dlg-cals').showModal(); }
+
+// ---------- admin: companies of the current calendar ----------
+function drawCompanyList() {
+  const msg = (m) => { const e = $('co-error'); e.textContent = m; e.hidden = !m; };
+  const all = state.companyList;
+  $('cos-title').textContent = `Companies — ${calendarLabel(state.cal)}`;
+  if (!$('co-color').dataset.touched) $('co-color').value = nextCompanyColor(all);
+  $('co-list').replaceChildren(...(all.length ? all.map((c) => {
+    const name = h('input', { type: 'text', value: c.name, maxlength: 120, 'aria-label': 'Company name' });
+    const color = h('input', { type: 'color', value: c.color, 'aria-label': `Colour for ${c.name}` });
+    const save = async () => {
+      msg('');
+      try { await api.updateCompany(c.id, { name: name.value, color: color.value }, all); toast('Company saved.'); }
+      catch (x) { msg(friendly(x)); name.value = c.name; color.value = c.color; }
+    };
+    name.onchange = save; color.onchange = save;
+    return h('li', { class: `co-row${c.active === false ? ' archived' : ''}` }, color, name,
+      h('button', {
+        type: 'button', class: `icon${c.active === false ? '' : ' danger-text'}`, onclick: async () => {
+          try { await api.setCompanyActive(c.id, c.active === false); } catch (x) { msg(friendly(x)); }
+        }
+      }, c.active === false ? 'Restore' : 'Remove'));
+  }) : [h('li', { class: 'muted' }, 'No companies yet. Add the first one above.')]));
+}
+
+function openCompanies() { $('co-error').hidden = true; $('co-color').dataset.touched = ''; drawCompanyList(); $('dlg-cos').showModal(); }
 
 // ---------- admin: blocked dates ----------
 function blockProblem(msg) { const e = $('bl-error'); e.textContent = msg; e.hidden = !msg; }
@@ -824,6 +923,30 @@ function wire() {
       $('dlg-password').close(); toast('Password changed.');
     } catch (x) { err.textContent = friendly(x); err.hidden = false; }
   };
+  $('btn-cals').onclick = openCalendars;
+  $('cals-close').onclick = () => $('dlg-cals').close();
+  $('form-cal').onsubmit = async (e) => {
+    e.preventDefault();
+    const err = $('cal-error'); err.hidden = true;
+    try {
+      const code = cleanCalendarCode($('cal-code').value);
+      if (state.calendars.some((c) => c.id === code)) throw new Error('That calendar already exists.');
+      await api.createCalendar(code, Math.max(0, ...state.calendars.map((c) => c.order ?? 0)) + 1);
+      e.target.reset(); toast(`Calendar ${calendarLabel(code)} created.`);
+    } catch (x) { err.textContent = friendly(x); err.hidden = false; }
+  };
+  $('btn-cos').onclick = openCompanies;
+  $('cos-close').onclick = () => $('dlg-cos').close();
+  $('co-color').oninput = () => { $('co-color').dataset.touched = '1'; };
+  $('form-co').onsubmit = async (e) => {
+    e.preventDefault();
+    const err = $('co-error'); err.hidden = true;
+    try {
+      if (!COLOR_RE.test($('co-color').value)) throw new Error('Pick a valid colour.');
+      await api.addCompany({ name: $('co-name').value, color: $('co-color').value }, state.companyList);
+      $('co-name').value = ''; $('co-color').dataset.touched = '';
+    } catch (x) { err.textContent = friendly(x); err.hidden = false; }
+  };
   $('btn-users').onclick = openUsers;
   $('users-close').onclick = () => { $('dlg-users').close(); unUsers?.(); unUsers = null; };
   $('btn-settings').onclick = openSettings;
@@ -858,7 +981,8 @@ function wire() {
     try {
       await api.adminCreateUser({
         name: $('nu-name').value.trim(), email: $('nu-email').value,
-        password: $('nu-pw').value, role: $('nu-role').value
+        password: $('nu-pw').value, role: $('nu-role').value,
+        calendar: state.multi && $('nu-role').value === 'staff' ? $('nu-cal').value : undefined
       });
       e.target.reset();
       toast('User created and activated.');

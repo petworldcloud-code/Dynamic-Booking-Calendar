@@ -65,9 +65,13 @@ export async function changePassword(oldPw, newPw) {
  * Admin only: create a login with a second Auth instance (so the admin stays signed in),
  * then write the profile + username mapping as the admin.
  */
-export async function adminCreateUser({ name, email, password, role }) {
-  const uname = usernameFromName(name);
-  if (!USERNAME_RE.test(uname)) {
+export async function adminCreateUser({ name, email, password, role, calendar }) {
+  // Staff accounts (a calendar is chosen) and administrators made in multi-calendar mode log in with their email: no username.
+  const byEmail = role === 'staff' || !!calendar;
+  const uname = byEmail ? '' : usernameFromName(name);
+  if (byEmail && !(email || '').trim().includes('@')) throw new Error('Enter a valid email address for this person.');
+  if (role === 'staff' && !calendar) throw new Error('Choose which calendar this staff member uses.');
+  if (!byEmail && !USERNAME_RE.test(uname)) {
     throw new Error('The company name is used as the username, so it must be 3-30 characters using letters, numbers, spaces, dot, dash or underscore.');
   }
   const realEmail = (email || '').trim().toLowerCase();
@@ -77,7 +81,7 @@ export async function adminCreateUser({ name, email, password, role }) {
   try {
     await updateProfile(cred.user, { displayName: name });
     await createUserProfile(cred.user.uid, {
-      displayName: name, username: uname, email: authEmail, role, status: 'active'
+      displayName: name, username: uname, email: authEmail, role, status: 'active', calendar: role === 'staff' ? calendar : undefined
     });
   } finally {
     await signOut(second);

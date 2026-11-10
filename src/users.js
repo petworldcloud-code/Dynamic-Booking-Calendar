@@ -1,5 +1,5 @@
 import {
-  doc, getDoc, onSnapshot, collection, query, orderBy, updateDoc, writeBatch, serverTimestamp
+  doc, getDoc, onSnapshot, collection, query, orderBy, updateDoc, writeBatch, serverTimestamp, deleteField
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 
@@ -10,13 +10,14 @@ export async function lookupUsernameEmail(username) {
 }
 
 /** Admin only (enforced by rules): profile + username mapping, written atomically. */
-export function createUserProfile(uid, { displayName, username, email, role, status }) {
+export function createUserProfile(uid, { displayName, username, email, role, status, calendar }) {
   const batch = writeBatch(db);
   batch.set(doc(db, 'users', uid), {
-    displayName: displayName.slice(0, 80), username, email, role, status,
+    displayName: displayName.slice(0, 80), email, role, status,
+    ...(username ? { username } : {}), ...(calendar ? { calendar } : {}), // staff log in by email: no username needed
     createdAt: serverTimestamp(), updatedAt: serverTimestamp()
   });
-  batch.set(doc(db, 'usernames', username), { email, uid });
+  if (username) batch.set(doc(db, 'usernames', username), { email, uid });
   return batch.commit();
 }
 
@@ -38,5 +39,8 @@ export function deleteUser(uid, username) {
 }
 
 export function updateUser(uid, fields) {
-  return updateDoc(doc(db, 'users', uid), { ...fields, updatedAt: serverTimestamp() });
+  // calendar: null removes the staff member's calendar.
+  const f = { ...fields };
+  if ('calendar' in f && !f.calendar) f.calendar = deleteField();
+  return updateDoc(doc(db, 'users', uid), { ...f, updatedAt: serverTimestamp() });
 }

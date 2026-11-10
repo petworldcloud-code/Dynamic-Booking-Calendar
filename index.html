@@ -35,6 +35,8 @@
           <span id="user-name"></span>
           <small id="user-role"></small>
           <div class="user-actions">
+            <button id="btn-cals" class="link" hidden type="button">Calendars</button>
+            <button id="btn-cos" class="link" hidden type="button">Companies</button>
             <button id="btn-users" class="link" hidden type="button">Users</button>
             <button id="btn-slots" class="link" hidden type="button">Time slots</button>
             <button id="btn-blocked" class="link" hidden type="button">Blocked dates</button>
@@ -229,16 +231,43 @@
   <dialog id="dlg-users" class="wide">
     <div class="dlg-head"><h3>Users</h3><button class="ghost" id="users-close" type="button">Close</button></div>
     <form id="form-newuser" class="newuser" autocomplete="off">
-      <h4>Add user</h4>
+      <h4 id="nu-title">Add user</h4>
       <input id="nu-name" type="text" placeholder="Company name (also the username)" maxlength="80" required aria-label="Company name">
       <input id="nu-email" type="email" placeholder="Email (optional, enables password reset)" aria-label="Email (optional)">
       <input id="nu-pw" type="text" placeholder="Initial password (min 6)" minlength="6" required aria-label="Initial password" autocomplete="off">
       <select id="nu-role" aria-label="Role"><option value="user">Standard user</option><option value="admin">Administrator</option></select>
+      <select id="nu-cal" aria-label="Calendar" hidden></select>
       <button class="primary" type="submit" id="nu-save">Create</button>
       <p id="nu-error" class="error" role="alert" hidden></p>
     </form>
-    <p class="meta">The username is the name in lowercase, spaces become dots (e.g. "Ali Tan" logs in as ali.tan). Give the new user that username and the initial password; they change it with the Password button in the header. Set Status to "suspended" to block someone. Deleting a login is done in the Firebase Console.</p>
-    <div class="table-wrap"><table><thead><tr><th>Company</th><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody id="users-rows"></tbody></table></div>
+    <label id="users-filter-label" class="filter" hidden>Show <select id="users-filter" aria-label="Filter users by calendar"></select></label>
+    <p class="meta" id="users-help">The username is the name in lowercase, spaces become dots (e.g. "Ali Tan" logs in as ali.tan). Give the new user that username and the initial password; they change it with the Password button in the header. Set Status to "suspended" to block someone. Deleting a login is done in the Firebase Console.</p>
+    <div class="table-wrap"><table><thead id="users-head"><tr><th>Company</th><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody id="users-rows"></tbody></table></div>
+  </dialog>
+
+  <!-- Admin: calendars -->
+  <dialog id="dlg-cals">
+    <div class="dlg-head"><h3>Calendars</h3><button class="ghost" id="cals-close" type="button">Close</button></div>
+    <p class="meta">Each calendar has its own bookings, companies, time slots, blocked dates and email alerts. The code can't be changed once created. Archiving hides a calendar from staff; its data is kept.</p>
+    <form id="form-cal" class="blockform" autocomplete="off">
+      <label>New calendar code <input id="cal-code" type="text" maxlength="10" placeholder="e.g. TG" required></label>
+      <button class="primary" type="submit">Add calendar</button>
+      <p id="cal-error" class="error" role="alert" hidden></p>
+    </form>
+    <ul id="cal-list" class="blocklist" aria-label="Calendars"></ul>
+  </dialog>
+
+  <!-- Admin: companies of the current calendar -->
+  <dialog id="dlg-cos" class="wide">
+    <div class="dlg-head"><h3 id="cos-title">Companies</h3><button class="ghost" id="cos-close" type="button">Close</button></div>
+    <p class="meta">These companies appear in the Company dropdown when booking in this calendar. Each has its own colour on the calendar. Removing a company keeps its old bookings but stops it being offered.</p>
+    <form id="form-co" class="blockform" autocomplete="off">
+      <label>Company name <input id="co-name" type="text" maxlength="120" required></label>
+      <label>Colour <input id="co-color" type="color" value="#2563eb"></label>
+      <button class="primary" type="submit">Add company</button>
+      <p id="co-error" class="error" role="alert" hidden></p>
+    </form>
+    <ul id="co-list" class="blocklist" aria-label="Companies"></ul>
   </dialog>
 
   <!-- Admin: blocked dates -->

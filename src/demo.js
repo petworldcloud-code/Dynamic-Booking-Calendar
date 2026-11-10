@@ -1,6 +1,7 @@
 // In-memory mock backend for UI/layout verification ONLY (VITE_DEMO_MODE=demo).
 // Sample rows are generated relative to today; nothing here ships as production data.
 import { todayISO, addDays } from './date-utils.js';
+import { cleanCompany, companyId } from './calendar-utils.js';
 import { cleanRecipient, cleanNotifySettings, DEFAULT_NOTIFY, MAX_RECIPIENTS } from './notify-utils.js';
 
 // ?as=tg opens the demo as TG staff; ?as=none as staff with no calendar. Default: admin.
@@ -23,6 +24,15 @@ const companies = {
   tg: mkCos(['TG Logistics', 'Shell', 'Petronas']), nf: mkCos(['NF Supplier']), pme: []
 };
 const coSubs = new Set();
+const fireCos = () => coSubs.forEach((f) => f());
+const calSubs = new Set();
+let users = [
+  { ...profile },
+  { uid: 'u2', displayName: 'Pending Person', email: 'pending@example.com', role: 'user', status: 'pending' },
+  { uid: 'u3', displayName: 'Aisyah (TG staff)', email: 'aisyah@example.com', role: 'staff', status: 'active', calendar: 'tg' },
+  { uid: 'u4', displayName: 'Lee (DIM staff)', email: 'lee@example.com', role: 'staff', status: 'active', calendar: 'dim' }
+];
+const userSubs = new Set();
 let currentCal = null;
 const inCal = (r) => (r.cal || 'dim') === (currentCal || 'dim');
 let seq = 0;
@@ -65,22 +75,39 @@ function sub(fn) { const run = () => fn(); subs.add(run); run(); return () => su
 export const api = {
   watchSession(cb) { setTimeout(() => cb({ state: 'active', user: me, profile }), 50); return () => {}; },
   login: async () => {}, logout: async () => {}, resetPassword: async () => {},
-  adminCreateUser: async () => 'demo-new', changePassword: async () => {},
+  async adminCreateUser({ name, email, role, calendar }) {
+    if (role === 'staff' && !calendar) throw new Error('Choose which calendar this staff member uses.');
+    users.push({ uid: `u${users.length + 1}`, displayName: name, email, role, status: 'active', ...(calendar ? { calendar } : {}) });
+    userSubs.forEach((f) => f()); return 'demo-new';
+  },
+  changePassword: async () => {},
   setCalendar(c) { currentCal = c || null; },
   getCalendar: () => currentCal,
   // ?legacy acts like today's live site, where the rules refuse the calendars list.
   watchCalendars(cb, onError) {
     const legacy = new URLSearchParams(globalThis.location?.search || '').has('legacy');
-    setTimeout(() => (legacy ? onError({ code: 'permission-denied' }) : cb(calendars.map((c) => ({ ...c })))), 20);
-    return () => {};
+    if (legacy) { setTimeout(() => onError({ code: 'permission-denied' }), 20); return () => {}; }
+    const run = () => cb(calendars.map((c) => ({ ...c })));
+    calSubs.add(run); setTimeout(run, 20);
+    return () => calSubs.delete(run);
   },
-  createCalendar: async () => {}, setCalendarActive: async () => {},
+  async createCalendar(code, order) { calendars.push({ id: code, name: code.toUpperCase(), order, active: true }); companies[code] = []; calSubs.forEach((f) => f()); },
+  async setCalendarActive(id, active) { calendars.find((c) => c.id === id).active = active; calSubs.forEach((f) => f()); },
   watchCompanies(cb) {
     const run = () => cb((companies[currentCal || 'dim'] || []).map((c) => ({ ...c })));
     coSubs.add(run); run();
     return () => coSubs.delete(run);
   },
-  addCompany: async () => {}, updateCompany: async () => {}, setCompanyActive: async () => {},
+  async addCompany(form, existing = []) {
+    const c = cleanCompany(form, existing);
+    const list = (companies[currentCal || 'dim'] ||= []);
+    list.push({ id: companyId(c.name, list), ...c, active: true }); fireCos();
+  },
+  async updateCompany(id, form, existing = []) {
+    const c = cleanCompany(form, existing, id);
+    Object.assign((companies[currentCal || 'dim'] || []).find((x) => x.id === id), c); fireCos();
+  },
+  async setCompanyActive(id, active) { (companies[currentCal || 'dim'] || []).find((x) => x.id === id).active = active; fireCos(); },
   watchRange(s, e, cb) { return sub(() => cb(rows.filter((r) => inCal(r) && r.bookingDate >= s && r.bookingDate <= e).sort(byDate))); },
   watchList({ from, before, max = 50 }, cb) {
     return sub(() => {
@@ -104,11 +131,15 @@ export const api = {
   async deleteBooking(b) { rows = rows.filter((r) => r.id !== b.id); notify(); },
   millis: (t) => (t && t.toMillis ? t.toMillis() : 0),
   watchUsers(cb) {
-    cb([{ ...profile }, { uid: 'u2', displayName: 'Pending Person', email: 'pending@example.com', role: 'user', status: 'pending' }]);
-    return () => {};
+    const run = () => cb(users.map((u) => ({ ...u })));
+    userSubs.add(run); run();
+    return () => userSubs.delete(run);
   },
-  async updateUser() {},
-  async deleteUser() {},
+  async updateUser(uid, f) {
+    const u = users.find((x) => x.uid === uid);
+    Object.assign(u, f); if ('calendar' in f && !f.calendar) delete u.calendar; userSubs.forEach((x) => x());
+  },
+  async deleteUser(uid) { users = users.filter((u) => u.uid !== uid); userSubs.forEach((x) => x()); },
   getRetention: async () => ({ autoDeleteEnabled: false, retentionDays: 90 }),
   saveRetention: async () => {},
   watchSlots(cb) {
