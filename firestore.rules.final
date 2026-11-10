@@ -1,0 +1,297 @@
+rules_version = '2';
+// FINAL rules: only the calendars/{cal}/... paths. Publish after the move to calendars is finished and checked.
+// GENERATED from firestore.rules by scripts/make-final-rules.mjs - do not edit by hand.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+    function profile(uid) { return get(/databases/$(database)/documents/users/$(uid)).data; }
+    function hasProfile(uid) { return exists(/databases/$(database)/documents/users/$(uid)); }
+    function isActive() {
+      return signedIn() && hasProfile(request.auth.uid) && profile(request.auth.uid).status == 'active';
+    }
+    function isAdmin() { return isActive() && profile(request.auth.uid).role == 'admin'; }
+    function isOwner(data) { return data.createdBy == request.auth.uid; }
+
+
+    // ---------- calendars ----------
+    function calRef(cal) { return /databases/$(database)/documents/calendars/$(cal); }
+    // An admin sees every calendar; staff see only their own, and only while it is not archived.
+    function canUse(cal) {
+      return isAdmin()
+        || (isActive() && profile(request.auth.uid).role == 'staff'
+          && profile(request.auth.uid).get('calendar', '') == cal
+          && get(calRef(cal)).data.get('active', true) != false);
+    }
+    function validCalCode(c) { return c.matches('^[a-z][a-z0-9]{1,9}$'); }
+
+    // ---------- users ----------
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+
+      // No self-registration: only an admin creates profiles (accounts are made in the app by an admin).
+      // role 'staff' = a person with one calendar; 'user' = an old company account; 'admin' sees everything.
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['displayName', 'username', 'email', 'role', 'status', 'calendar', 'createdAt', 'updatedAt'])
+        && request.resource.data.role in ['admin', 'user', 'staff']
+        && request.resource.data.status in ['pending', 'active', 'suspended']
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 80
+        && request.resource.data.email is string
+        && (request.resource.data.role != 'staff'
+          || (request.resource.data.get('calendar', null) is string && exists(calRef(request.resource.data.calendar))))
+        && (!('calendar' in request.resource.data) || (request.resource.data.calendar is string && validCalCode(request.resource.data.calendar)))
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      // Users may change only their display name (never their role, status or calendar); admins may change those.
+      allow update: if (signedIn() && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'updatedAt'])
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() > 0
+          && request.resource.data.displayName.size() <= 80)
+        || (isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'status', 'displayName', 'username', 'calendar', 'updatedAt'])
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() > 0
+          && request.resource.data.displayName.size() <= 80
+          && request.resource.data.role in ['admin', 'user', 'staff']
+          && request.resource.data.status in ['pending', 'active', 'suspended']
+          && (request.resource.data.role != 'staff'
+            || (request.resource.data.get('calendar', null) is string && exists(calRef(request.resource.data.calendar))))
+          && (!('calendar' in request.resource.data) || (request.resource.data.calendar is string && validCalCode(request.resource.data.calendar))));
+
+      // Admin removes a person's access (not themselves). The Firebase login itself is removed in the Console.
+      allow delete: if isAdmin() && request.auth.uid != uid;
+    }
+
+    // ---------- shared shapes ----------
+    // companyId is only present on bookings inside a calendar.
+    function validBookingShape(d) {
+      return d.keys().hasAll(['bookingDate', 'eventName', 'truckCount', 'createdBy', 'createdByName', 'createdAt', 'updatedBy', 'updatedByName', 'updatedAt'])
+        && d.keys().hasOnly(['bookingDate', 'eventName', 'companyId', 'notes', 'deliveryType', 'vehicleType', 'truckType', 'truckCount', 'palletized', 'plateNumber', 'timeSlot', 'attachments', 'createdBy', 'createdByName', 'createdAt', 'updatedBy', 'updatedByName', 'updatedAt'])
+        && (!('timeSlot' in d) || (d.timeSlot is string
+          && d.timeSlot.matches('^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$')))
+        && d.bookingDate is string
+        && d.bookingDate.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && d.eventName is string && d.eventName.size() > 0 && d.eventName.size() <= 120
+        && (!('notes' in d) || (d.notes is string && d.notes.size() <= 1000))
+        && (!('deliveryType' in d) || d.deliveryType in ['Delivery stock', 'Container pull', 'Unloading'])
+        && (!('vehicleType' in d) || d.vehicleType in ['Van', 'Truck'])
+        // A van has no truck type; anything else (a truck, or an older booking without vehicleType) must have one.
+        && (('vehicleType' in d && d.vehicleType == 'Van')
+          ? !('truckType' in d)
+          : ('truckType' in d && d.truckType in ['40footer', '20footer', '10ton', '5ton', '3ton', '1ton']))
+        && (!('palletized' in d) || d.palletized is bool)
+        && (!('plateNumber' in d) || (d.plateNumber is string && d.plateNumber.size() <= 100))
+        && d.truckCount is int && d.truckCount >= 1 && d.truckCount <= 6
+        && (!('attachments' in d) || (d.attachments is list && d.attachments.size() <= 5))
+        && d.createdByName is string && d.createdByName.size() <= 80
+        && d.updatedByName is string && d.updatedByName.size() <= 80;
+    }
+
+    function validAttachment(a) {
+      return a.keys().hasOnly(['name', 'type', 'size', 'data', 'createdBy', 'createdAt'])
+        && a.name is string && a.name.size() <= 100
+        && a.type is string && a.type.size() <= 100
+        && a.size is int && a.size <= 614400
+        && a.data is string && a.data.size() <= 840000
+        && a.createdBy == request.auth.uid
+        && a.createdAt == request.time;
+    }
+
+    function validSlots(d) {
+      return d.keys().hasOnly(['slots', 'updatedAt', 'updatedBy'])
+        && d.slots is list
+        && d.slots.size() <= 24
+        && d.updatedBy == request.auth.uid
+        && d.updatedAt == request.time;
+    }
+    // Which emails are sent: new booking / day-before / 2-hours-before, and the hour (0-23) the day-before mail goes out.
+    function validNotifySettings(d) {
+      return d.keys().hasOnly(['onNew', 'dayBefore', 'twoHours', 'dayBeforeHour', 'updatedAt', 'updatedBy'])
+        && d.onNew is bool
+        && d.dayBefore is bool
+        && d.twoHours is bool
+        && d.dayBeforeHour is int
+        && d.dayBeforeHour >= 0
+        && d.dayBeforeHour <= 23
+        && d.updatedBy == request.auth.uid
+        && d.updatedAt == request.time;
+    }
+    function validRecipient(d, e) {
+      return d.keys().hasOnly(['email', 'allCompanies', 'companies', 'createdBy', 'createdAt'])
+        && d.email == e
+        && e.size() <= 120
+        && e.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$')
+        && d.allCompanies is bool
+        && d.companies is list
+        && d.companies.size() <= 100
+        && (d.allCompanies || d.companies.size() > 0)
+        && d.createdBy == request.auth.uid
+        && d.createdAt == request.time;
+    }
+    function validBlock(d, date) {
+      return date.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && d.keys().hasOnly(['reason', 'createdBy', 'createdAt'])
+        && d.reason is string
+        && d.reason.size() <= 80
+        && d.createdBy == request.auth.uid
+        && d.createdAt == request.time;
+    }
+
+    // =====================================================================
+    // NEW: one folder per calendar (DIM, TG, NF, PME ...)
+    // =====================================================================
+
+    // Every active user can read the list (the app turns multi-calendar mode on only when this read works); only admins write.
+    match /calendars/{cal} {
+      allow read: if isActive();
+      allow create: if isAdmin()
+        && validCalCode(cal)
+        && request.resource.data.keys().hasOnly(['name', 'order', 'active', 'createdAt', 'updatedAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 40
+        && request.resource.data.order is int
+        && request.resource.data.active is bool
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      // Archive/unarchive or rename. The code (document id) never changes. Calendars are archived, not deleted.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'order', 'active', 'updatedAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 40
+        && request.resource.data.order is int
+        && request.resource.data.active is bool
+        && request.resource.data.updatedAt == request.time;
+
+      // The company list of this calendar. Admin writes; people who can use the calendar read.
+      match /companies/{co} {
+        allow read: if canUse(cal);
+        allow create: if isAdmin()
+          && co.matches('^[a-z0-9][a-z0-9-]{0,59}$')
+          && request.resource.data.keys().hasOnly(['name', 'color', 'active', 'createdAt', 'updatedAt'])
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+          && request.resource.data.color is string && request.resource.data.color.matches('^#[0-9a-fA-F]{6}$')
+          && request.resource.data.active is bool
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        // Rename, recolour, archive. Companies are archived, not deleted: old bookings still point at them.
+        allow update: if isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'color', 'active', 'updatedAt'])
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+          && request.resource.data.color is string && request.resource.data.color.matches('^#[0-9a-fA-F]{6}$')
+          && request.resource.data.active is bool
+          && request.resource.data.updatedAt == request.time;
+      }
+
+      // A date an admin has closed (holiday etc.) has a document here.
+      function dateOpenIn(date) { return !exists(/databases/$(database)/documents/calendars/$(cal)/blockedDates/$(date)); }
+      // The booking's company must be an active company of THIS calendar, and eventName must be its name.
+      function companyOk(d) {
+        return d.get('companyId', null) is string
+          && exists(/databases/$(database)/documents/calendars/$(cal)/companies/$(d.companyId))
+          && get(/databases/$(database)/documents/calendars/$(cal)/companies/$(d.companyId)).data.get('active', true) != false
+          && get(/databases/$(database)/documents/calendars/$(cal)/companies/$(d.companyId)).data.name == d.eventName;
+      }
+
+      match /bookings/{id} {
+        allow read: if canUse(cal);
+
+        allow create: if canUse(cal)
+          && validBookingShape(request.resource.data)
+          && companyOk(request.resource.data)
+          && dateOpenIn(request.resource.data.bookingDate)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdByName == profile(request.auth.uid).displayName
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        // Staff change only their own bookings; an admin can change any. Creation info is immutable.
+        allow update: if canUse(cal)
+          && (isOwner(resource.data) || isAdmin())
+          && validBookingShape(request.resource.data)
+          && (request.resource.data.bookingDate == resource.data.bookingDate || dateOpenIn(request.resource.data.bookingDate))
+          && ((request.resource.data.get('companyId', null) == resource.data.get('companyId', null)
+                && request.resource.data.eventName == resource.data.eventName)
+              || companyOk(request.resource.data))
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdByName == resource.data.createdByName
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if canUse(cal) && (isOwner(resource.data) || isAdmin());
+
+        match /attachments/{aid} {
+          allow read: if canUse(cal);
+          allow create: if canUse(cal)
+            && (getAfter(/databases/$(database)/documents/calendars/$(cal)/bookings/$(id)).data.createdBy == request.auth.uid || isAdmin())
+            && validAttachment(request.resource.data);
+          allow delete: if canUse(cal)
+            && (get(/databases/$(database)/documents/calendars/$(cal)/bookings/$(id)).data.createdBy == request.auth.uid || isAdmin());
+          allow update: if false;
+        }
+      }
+
+      // Blocked dates apply to everyone, admins included. Remove the block first to book that day.
+      match /blockedDates/{d} {
+        allow read: if canUse(cal);
+        allow create, update: if isAdmin() && validBlock(request.resource.data, d);
+        allow delete: if isAdmin();
+      }
+
+      match /settings/{doc} {
+        allow read: if canUse(cal);
+        allow write: if isAdmin() && (
+          (doc == 'slots' && validSlots(request.resource.data))
+          || (doc == 'notifications' && validNotifySettings(request.resource.data)));
+      }
+
+      // Email recipients of this calendar (admin only; the sender script reads them with the owner's access).
+      // companies = ids of this calendar's companies.
+      match /notifyRecipients/{e} {
+        allow read, delete: if isAdmin();
+        allow create, update: if isAdmin() && validRecipient(request.resource.data, e);
+      }
+
+      // notifyLog/* is written only by the Apps Script (owner access) and closed to the app by the catch-all below.
+    }
+
+    // =====================================================================
+    // OLD single-calendar paths. Kept until the move to calendars is finished.
+    // =====================================================================
+    // The old single-calendar paths (bookings, blockedDates, notifyRecipients, settings/slots|notifications)
+    // are closed: everything now lives under calendars/{cal}. The catch-all at the bottom denies them.
+
+    // ---------- global settings (not per calendar) ----------
+    match /settings/retention {
+      allow read: if isActive();
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['autoDeleteEnabled', 'retentionDays', 'updatedAt', 'updatedBy'])
+        && request.resource.data.autoDeleteEnabled is bool
+        && request.resource.data.retentionDays is int
+        && request.resource.data.retentionDays >= 30
+        && request.resource.data.retentionDays <= 3650
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    // ---------- usernames (login lookup; old company logins only) ----------
+    // Single-document reads are public so the login screen can map a username to its auth email;
+    // listing is never allowed. Only admins write.
+    match /usernames/{name} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if isAdmin()
+        && name.matches('^[a-z0-9._-]{3,30}$')
+        && request.resource.data.keys().hasOnly(['email', 'uid'])
+        && request.resource.data.email is string
+        && request.resource.data.uid is string;
+      allow update, delete: if isAdmin();
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}
