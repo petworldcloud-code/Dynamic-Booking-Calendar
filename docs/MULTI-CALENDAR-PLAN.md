@@ -1,131 +1,161 @@
 # Plan: Multiple calendars (DIM, TG, NF, PME)
 
-Status: **draft, waiting for owner approval** (2026-11-10). Nothing is built yet.
+Status: **draft v2, waiting for owner approval** (2026-11-10). Nothing is built yet.
+
+v2 changes: accounts are now **staff** (email + password) tied to **one** calendar, and **companies** become a list per calendar that the admin maintains.
 
 ## Goal
 
-Today the site has one calendar (DIM). After this change:
+Today the site has one calendar (DIM), and each company logs in with its own account. After this change:
 
-- There are several calendars: **DIM, TG, NF, PME**, and the admin can add more later.
-- Each calendar is completely separate. It has its own bookings, time slots, blocked dates and email alerts.
+- **Calendars.** There are several calendars: **DIM, TG, NF, PME**. The admin can add more later. The names are just the codes.
+- **Separate data.** Each calendar has its own:
+  - bookings
+  - companies
+  - time slots
+  - blocked dates
+  - email alerts
+
+  Only people in DIM can see DIM bookings.
 - **Admins** see every calendar and can switch between them at any time.
-- The **admin decides which accounts can use which calendars**. One company login can be given one calendar or several.
-- A company only sees the calendars it has been given. If it has just one, there is no switcher and the site looks the same as today.
+- **Staff accounts.** Accounts are now staff. Each one logs in with an **email and password** and belongs to **exactly one** calendar, chosen by the admin.
+- **Companies are no longer accounts.** They are a list per calendar, maintained by the admin, and each company has its **own colour**. When booking, staff pick the company from a dropdown that only shows that calendar's companies.
 
 ## What the user sees
 
 | Who | What changes |
 |---|---|
-| Admin | A **calendar switcher** in the header shows DIM / TG / NF / PME. The current calendar's name and colour are shown big, so it's always clear which one you're working in. |
-| Admin | A new **Calendars** screen to add a calendar (code + full name + colour), rename it, reorder it, or archive it. Archived calendars are hidden from companies but their data is kept. |
-| Admin | In **Users**, each account gets ticks for the calendars it may use. The same ticks appear when creating a new account. |
+| Admin | A **calendar switcher** in the header (DIM / TG / NF / PME). The selected calendar's code is shown next to the title, e.g. **TG · Booking Calendar**. |
+| Admin | **Calendars** screen to add, rename or archive a calendar. Archived calendars are hidden from staff, and their data is kept. |
+| Admin | **Companies** screen, for the calendar currently selected: add, rename or remove a company, and pick its colour. Removed companies stay on their old bookings but are no longer offered in the dropdown. |
+| Admin | **Users** screen: create a staff account with name, email, password and its one calendar. The list shows each account's calendar and can be filtered by calendar. |
 | Admin | **Time slots, Blocked dates and Email alerts** open for the calendar currently selected. Blocked dates gets an extra tick, "Block on all calendars", for public holidays. |
-| Company with 2+ calendars | Same switcher, showing only its own calendars. |
-| Company with 1 calendar | No visible change. |
-| Company with 0 calendars | Sees "Your account has no calendar yet. Ask the admin." |
-| Everyone | The last calendar used is remembered. A link like `…/Dynamic-Booking-Calendar/#tg` opens TG directly. |
+| Staff | Logs in with email + password and lands straight in their calendar, with no switcher. The booking form has a **Company** dropdown listing that calendar's companies. |
+| Everyone | Each booking label on the calendar is shown in its **company's colour**. |
+| Everyone | "Forgot password" now really emails a reset link, because staff have real email addresses. |
 
-The site title becomes **"Booking Calendar"**, with the selected calendar shown next to it (e.g. **TG · Booking Calendar**).
+The login box accepts an email. The old usernames, like the admin `dim`, keep working.
 
 ## Data model (Firestore)
 
-Each calendar keeps its data under its own folder, so calendars can never mix:
-
 ```
-calendars/{cal}                      { name, color, order, active, createdAt, updatedAt }
-calendars/{cal}/bookings/{id}        same fields as today (+ attachments sub-collection)
-calendars/{cal}/blockedDates/{date}  same as today
-calendars/{cal}/settings/slots       same as today
+calendars/{cal}                          { name, order, active, createdAt, updatedAt }
+calendars/{cal}/companies/{id}           { name, color, active, createdAt, updatedAt }
+calendars/{cal}/bookings/{id}            today's fields + companyId (eventName = company name at booking time)
+calendars/{cal}/bookings/{id}/attachments/{aid}
+calendars/{cal}/blockedDates/{date}
+calendars/{cal}/settings/slots
 calendars/{cal}/settings/notifications
-calendars/{cal}/notifyRecipients/{email}
-calendars/{cal}/notifyLog/{key}      (sender script only)
-users/{uid}                          + calendars: ["dim", "tg"]   (ignored for admins)
-settings/retention                   stays global (one auto-delete rule for all calendars)
-usernames/{name}                     unchanged
+calendars/{cal}/notifyRecipients/{email} { allCompanies, companies: [companyId…] }
+calendars/{cal}/notifyLog/{key}          (sender script only)
+users/{uid}                              { displayName, email, role: admin|staff, status, calendar: "tg" }
+settings/retention                       stays global
+usernames/{name}                         kept only for old username logins
 ```
 
-- `{cal}` is a short lowercase code (`dim`, `tg`, `nf`, `pme`). It cannot be changed once created; the display name can.
-- The existing booking indexes already cover `bookings` sub-collections, so no new indexes are needed.
-
-### Why separate folders and not a "calendar" field on each booking
-
-- The security rules can check access from the path alone, which makes them simple and hard to get wrong.
-- Time slots, blocked dates and email settings split per calendar naturally.
-- One bug in a query cannot show TG bookings inside DIM.
+- **Calendar codes:** `{cal}` is a short lowercase code (`dim`, `tg`, `nf`, `pme`). It is fixed once created.
+- **Indexes:** the existing booking indexes already cover these sub-collections, so no new indexes are needed.
+- **Why each calendar gets its own folder:** the security rules can check access from the path alone. A mistake in a query therefore cannot show TG data inside DIM.
 
 ## Security rules (summary)
 
-- `canUse(cal)` is true for an admin, or for an active user whose profile `calendars` list contains `cal`.
-- **Bookings, blocked dates, slots:** read, create, edit and delete under `calendars/{cal}/…` require `canUse(cal)` plus all of today's checks:
-  - a company can only book under its own name;
+- **Access check.** `canUse(cal)` is true for an admin, or for active staff whose profile has `calendar == cal`.
+- **Bookings** under `calendars/{cal}/…` need `canUse(cal)` plus today's checks:
+  - shape and limits;
   - blocked dates apply to everyone;
-  - the data shape is validated.
-- **Calendar list (names and colours):** readable by any active user. Only admins write it. Calendars are archived, never deleted, from the app.
-- **Calendar access on profiles:** only admins can change a profile's `calendars` list. A company cannot give itself access.
-- **Email recipients, notification settings and the notify log:** admin-only, as today.
+  - creation info can't be changed.
+- **Company on a booking.** It must point to an **active company of that same calendar**, and the booking's company name must match it. Staff therefore cannot book for a company from another calendar or invent one.
+- **Admin-only areas:**
+  - companies, calendars, time slots and blocked dates (writes only);
+  - email recipients and email settings;
+  - the notify log.
+- **Profiles.** Only admins can create staff or change a staff member's calendar or role. Staff cannot move themselves to another calendar.
 
 ## Email alerts
 
-- **Recipients and settings are per calendar.** If one email should get alerts for TG and NF, the admin adds it in both calendars.
-  - Inside each calendar, the per-company ticks work as they do today.
-  - The company list shows only the companies that have access to that calendar.
-- **The sender script (Apps Script)** loops over every active calendar every 5 minutes. Subjects get a prefix, e.g. `[TG] New booking: …`. The link in the mail opens that calendar.
-- Reminders already sent are remembered per calendar, so moving the data does not resend anything.
+- **Recipients and settings are per calendar**, because each calendar has a different person in charge.
+- **Company ticks.** Inside a calendar, each email can tick "All companies" or pick from **that calendar's** company list, as today.
+- **The sender script** (Apps Script) loops over every active calendar every 5 minutes.
+  - Subjects start with the code, e.g. `[TG] New booking: …`.
+  - The link in the mail opens that calendar.
+- **No repeats.** Reminders already sent are remembered per calendar, so moving the data does not resend anything.
 
 ## Moving the existing DIM data (one time)
 
-The Apps Script runs as the Firebase owner, so it can copy data exactly: original times and creators are kept, and the security rules are not involved. A new function `migrateToCalendars()`:
+The Apps Script runs as the Firebase owner, so it can copy data exactly, keeping the original times and creators. A new function `migrateToCalendars()`:
 
-1. Creates `calendars/dim` (name "DIM").
-2. Copies everything under the old paths into `calendars/dim/…`:
-   - bookings and their attachments;
+1. Creates `calendars/dim`.
+2. **Builds the DIM company list** from today's company accounts and from every company name found on existing bookings. Each company gets a different starting colour, which the admin can change later.
+3. Copies into `calendars/dim/…`:
+   - bookings and their attachments, each booking gaining its `companyId`;
    - blocked dates;
    - time slots;
-   - notification settings, recipients and the notify log.
-3. Gives every non-admin account `calendars: ["dim"]`, so nobody loses access.
-4. Reports the counts copied. It is **safe to run twice**: it only copies what is missing or newer.
+   - email settings and recipients (their company ticks become company ids);
+   - the notify log.
+4. **Old company logins** (like `tefal`) are **suspended, not deleted.** Companies no longer log in. The admin creates staff accounts instead. The admin account is untouched.
+5. Reports the counts. It is **safe to run twice**: it only copies what is missing or newer.
 
-The old data is **not deleted** in this step. It stays as a backup until the owner says to remove it.
+The old data is **not deleted**. It stays as a backup until the owner says to remove it.
 
 ### Go-live order (one quiet window, ~20 min)
 
 1. **Publish transition rules** that allow both the old and the new paths.
 2. **Run `migrateToCalendars()`** and check the counts.
-3. **Push the new app.** GitHub Pages deploys in about 1–2 minutes.
+3. **Push the new app.** GitHub Pages deploys it in about 1–2 minutes.
 4. **Run `migrateToCalendars()` again** to catch any booking made in the old app during step 3.
 5. **Update the Apps Script** sender to the multi-calendar version.
-6. **Check DIM** looks exactly as before. Then add TG, NF and PME, and tick access for the right accounts.
-7. **A week later**, with the owner's OK: publish the final rules (old paths locked) and delete the old copies.
+6. **Check DIM:**
+   - every booking is there, with company colours;
+   - the companies list is right.
+7. **Add TG, NF and PME** with their companies, then create the staff accounts and email alert lists.
+8. **A week later**, with the owner's OK:
+   - publish the final rules, which lock the old paths;
+   - delete the old copies.
 
 ## Build phases (each one committed and pushed)
 
 | # | Phase | Main files |
 |---|---|---|
-| 1 | Data layer: calendar path helper, `calendars` collection read/write, access helper + unit tests | `src/calendars.js` (new), `src/bookings.js`, `src/blocked.js`, `src/slots.js`, `src/notify.js`, `src/api.js`, `tests/calendars.test.js` |
-| 2 | Switcher + per-calendar loading (stop and restart live listeners on switch, remember last calendar, `#tg` links, "no calendar" screen) | `src/main.js`, `index.html`, `assets/css/styles.css` |
-| 3 | Admin: Calendars screen (add/rename/colour/order/archive) and calendar ticks in Users / new account | `src/main.js`, `src/users.js`, `index.html` |
-| 4 | Per-calendar Email alerts in the app + "Block on all calendars" | `src/main.js`, `src/blocked.js` |
-| 5 | Rules (transition + final versions) and rules tests | `firestore.rules`, `firestore.rules.final`, `tests/rules.test.js` |
-| 6 | Apps Script: multi-calendar sender + `migrateToCalendars()` + unit tests | `apps-script/Code.gs`, `tests/notify.test.js` |
-| 7 | Demo mode with 4 calendars and a browser check of every screen (admin + company, phone width) | `src/demo.js` |
-| 8 | Go-live (see above), README handover update, auto-delete script loops over calendars | `README.md`, `scripts/cleanup.js` |
+| 1 | **Data layer:** calendar path helper, calendars + companies read/write, access helper, company colour palette, unit tests | `src/calendars.js`, `src/companies.js` (new), `src/bookings.js`, `src/blocked.js`, `src/slots.js`, `src/notify.js`, `src/api.js`, `tests/calendars.test.js` |
+| 2 | **Calendar switching:** admin switcher, staff go straight to their calendar, per-calendar live loading, `#tg` links, "no calendar assigned" screen | `src/main.js`, `index.html`, `assets/css/styles.css` |
+| 3 | **Company dropdown and colours:** dropdown in the booking form, company colours on calendar labels and in the table | `src/main.js`, `src/calendar.js`, `assets/css/styles.css` |
+| 4 | **Admin screens:** Calendars and Companies screens; staff accounts with email + one calendar in Users | `src/main.js`, `src/users.js`, `src/auth.js`, `index.html` |
+| 5 | **Per-calendar settings:** email alerts per calendar (company ticks from that calendar's list), and "Block on all calendars" | `src/main.js`, `src/blocked.js` |
+| 6 | **Rules:** transition and final versions, plus rules tests | `firestore.rules`, `firestore.rules.final`, `tests/rules.test.js` |
+| 7 | **Apps Script:** multi-calendar sender, `migrateToCalendars()`, unit tests | `apps-script/Code.gs`, `tests/notify.test.js` |
+| 8 | **Demo mode and browser check:** 4 calendars with sample companies; check every screen as an admin and as staff, including at phone width | `src/demo.js` |
+| 9 | **Go-live:** the steps above, the README handover update, and the auto-delete script looping over calendars | `README.md`, `scripts/cleanup.js` |
 
-Phases 1–7 change nothing on the live site. The live site only changes in phase 8, in the agreed window.
+Phases 1–8 change nothing on the live site. It changes only in phase 9, in the agreed window.
 
 ## Testing
 
-- **Unit tests:** access rules for who sees which calendar, path building, and the migration's "copy only what's missing" logic.
-- **Demo mode:** checked in the browser as an admin and as a company with 1 calendar and with 2 calendars. A booking made in TG must never appear in DIM.
-- **Rules tests:** written but, as today, they **cannot run on this PC** (they need Java). Rules are checked by hand in the live window instead, with a test company account given TG only.
+- **Unit tests:**
+  - who can use which calendar;
+  - path building;
+  - company colours;
+  - the migration's company list building, and its "copy only what's missing" step.
+- **Demo mode:**
+  - a TG staff account never sees DIM;
+  - the company dropdown only lists the current calendar's companies;
+  - colours show on the calendar.
+- **Rules tests:** written but they **cannot run on this PC**, because they need Java. Instead they are checked by hand in the live window, with a test staff account on TG.
 - **Live check after go-live:**
-  - Make a test booking in TG and confirm the new-booking email arrives with `[TG]`.
-  - Confirm the test company cannot open DIM.
-  - Delete the test booking.
+  1. Make a test booking in TG.
+  2. Confirm the `[TG]` email arrives.
+  3. Confirm the TG test staff cannot open DIM.
+  4. Delete the test booking and the test account.
 
-## Decisions to confirm (recommended answer first)
+## Confirmed by the owner (2026-11-10)
 
-1. **One login for several calendars.** A company that books in both DIM and TG uses the same account with both ticked, not two separate accounts. *(Recommended.)*
-2. **Email alert lists are per calendar.** The alternative is one list where each email picks calendars and companies. Per calendar is simpler and matches "separate calendars".
-3. **No per-calendar admins for now.** Admins see everything. A "TG admin" who manages only TG can be added later if needed.
-4. **Full names for the calendars.** What do TG, NF and PME stand for, if the header should show more than the code? Is "DIM" also the right display name for the existing one?
-5. **Colours.** One colour per calendar in the header so staff notice when they switch. *(Recommended; the admin can change them.)*
+1. **One account, one calendar.** Accounts are staff with email + password. Companies are a per-calendar dropdown list maintained by the admin.
+2. **Email alerts are separate per calendar.**
+3. **No per-calendar admins.** Admins see everything.
+4. **Calendar names are the codes** DIM / TG / NF / PME.
+5. **No calendar colours.** Each company has its own colour instead.
+
+## Still open
+
+6. **Who can edit or delete a booking?**
+   - **Option A:** staff can edit or delete only the bookings they made, as today, and the admin can change any booking.
+   - **Option B:** any staff member of that calendar can edit or delete any booking in it.
