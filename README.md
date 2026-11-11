@@ -294,7 +294,7 @@ The new app code is **already live** (every push deploys), waiting in old mode: 
 4. Authentication -> Settings -> **Authorized domains** -> add `petworldcloud-code.github.io`.
 5. **Firestore Database** -> Create database -> **Standard edition**, location **asia-southeast1**, **production mode**.
 6. Publish `firestore.rules` (7.5).
-7. **Index** (needed or the calendar will not load): Firestore -> Indexes -> collection `bookings`, fields `bookingDate` Ascending + `createdAt` Ascending, scope Collection. (Or `firebase deploy --only firestore:indexes`.) Status must show **Enabled**.
+7. **Index** (needed or the calendar will not load): Firestore -> Indexes -> collection `bookings`, fields `bookingDate` Ascending + `createdAt` Ascending, scope Collection. **And a second one with both fields Descending** (the History tab needs it; without it History says "The query requires an index"). Status must show **Enabled** for both. (Or `firebase deploy --only firestore:indexes`.) Status must show **Enabled**.
 
 ### 8.2 GitHub (one-time; already done)
 1. Repository `petworldcloud-code/Dynamic-Booking-Calendar`.
