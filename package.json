@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run tests/date-utils.test.js",
+    "test": "vitest run --exclude \"tests/rules*.test.js\"",
     "test:rules": "firebase emulators:exec --only firestore \"vitest run tests/rules.test.js tests/rules-calendars.test.js\"",
     "cleanup:dry": "node scripts/cleanup.js"
   },

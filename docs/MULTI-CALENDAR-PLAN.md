@@ -109,18 +109,17 @@ The old data is **not deleted**. It stays as a backup until the owner says to re
 
 ### Go-live order (one quiet window, ~20 min)
 
-1. **Publish transition rules** that allow both the old and the new paths.
-2. **Run `migrateToCalendars()`** and check the counts.
-3. **Push the new app.** GitHub Pages deploys it in about 1–2 minutes.
-4. **Run `migrateToCalendars()` again** to catch any booking made in the old app during step 3.
-5. **Update the Apps Script** sender to the multi-calendar version.
-6. **Check DIM:**
-   - every booking is there, with company colours;
-   - the companies list is right.
-7. **Add TG, NF and PME** with their companies, then create the staff accounts and email alert lists.
-8. **A week later**, with the owner's OK:
-   - publish the final rules, which lock the old paths;
-   - delete the old copies.
+Updated in Phase 9: every push to `main` deploys, so **the new app is already live**, waiting in the old single-calendar mode. It switches by itself once `calendars/dim` exists and the rules allow reading it, i.e. at step 4. Full steps, rollback and details: **README 7.9**.
+
+1. Paste the new Apps Script sender (works on the old paths until calendars exist, so no email gap).
+2. Publish the transition rules.
+3. Run `migrateDryRun()` and check the counts.
+4. Run `migrateToCalendars()`: the site switches to DIM; old company logins are suspended. Ask open pages to refresh.
+5. Run `migrateToCalendars()` again to catch a booking saved from a page still open in old mode.
+6. Check DIM: every booking with company colours; the companies list is right.
+7. Add TG, NF and PME with their companies, time slots and email alert lists, then create the staff accounts.
+8. Live check with a test TG staff account (booking, `[TG]` email, cannot open DIM), then delete the test booking and account.
+9. **A week later**, with the owner's OK: publish the final rules (old paths locked) and delete the old copies.
 
 ## Build phases (each one committed and pushed)
 
