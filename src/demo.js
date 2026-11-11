@@ -68,6 +68,10 @@ for (let i = 0; i < 8; i++) rows.push(mk(12, `Overflow ${i + 1}`)); // 8 on one 
 rows.push(mk(-5, 'Past booking A'), mk(-30, 'Past booking B'));
 [[0, 'TG Logistics'], [2, 'Shell'], [8, 'Petronas']].forEach(([d, n]) => rows.push(mk(d, n, 0, 'tg')));
 rows.push(mk(1, 'NF Supplier', 0, 'nf'));
+// A few bookings made by a colleague, so staff see the "only your own" rule (no Edit/Delete on these).
+rows.filter((r) => ['Shell', 'Sony'].includes(r.eventName)).forEach((r) => {
+  r.createdBy = 'u9'; r.createdByName = 'Tom (colleague)'; r.updatedBy = 'u9'; r.updatedByName = 'Tom (colleague)';
+});
 
 const byDate = (a, b) => a.bookingDate.localeCompare(b.bookingDate) || a.createdAt.toMillis() - b.createdAt.toMillis();
 
